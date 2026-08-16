@@ -41,3 +41,9 @@ export type ToastMessage = {
   text: string;
   tone: ToastTone;
 };
+
+export type PlaceLinkResult =
+  | { status: "ok"; fromSectionId: string; toSectionId: string; toSectionName: string }
+  | { status: "duplicate"; sectionName: string }
+  | { status: "noop" }
+  | { status: "missing" };

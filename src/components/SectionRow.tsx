@@ -1,47 +1,90 @@
-import { useState } from "react";
 import type { RuntimeTabInfo, Section, StoredLink } from "../types/tabdock";
 import type { DropPlace } from "../utils/order";
 import { LinkRow } from "./LinkRow";
 
+export type DropHint =
+  | { type: "section"; sectionId: string }
+  | { type: "link"; linkId: string; place: DropPlace };
+
 type SectionRowProps = {
   section: Section;
   links: StoredLink[];
+  sections: Section[];
   runtimeByLinkId: Record<string, RuntimeTabInfo>;
   opening: boolean;
+  dragSourceId: string | null;
+  dragSourceSectionId: string | null;
+  dropHint: DropHint | null;
   onToggle: (sectionId: string) => void;
   onAddCurrent: (sectionId: string) => void;
   onOpenAll: (sectionId: string) => void;
   onOpenLink: (link: StoredLink) => Promise<void>;
   onRenameLink: (linkId: string, name: string) => Promise<void>;
-  onReorderLinks: (
-    sectionId: string,
-    draggedId: string,
-    targetId: string,
-    place: DropPlace,
-  ) => Promise<void>;
+  onMoveLink: (linkId: string, sectionId: string) => Promise<void>;
+  onOpenCopy: (link: StoredLink) => Promise<void>;
+  onCloseTab: (link: StoredLink) => Promise<void>;
+  onRemoveLink: (linkId: string) => Promise<void>;
+  onDragStart: (linkId: string) => void;
+  onLinkDragOver: (linkId: string, place: DropPlace) => void;
+  onSectionDragOver: (sectionId: string) => void;
+  onLinkDrop: (targetId: string) => void;
+  onSectionDrop: (sectionId: string) => void;
+  onDragEnd: () => void;
 };
 
 export function SectionRow({
   section,
   links,
+  sections,
   runtimeByLinkId,
   opening,
+  dragSourceId,
+  dragSourceSectionId,
+  dropHint,
   onToggle,
   onAddCurrent,
   onOpenAll,
   onOpenLink,
   onRenameLink,
-  onReorderLinks,
+  onMoveLink,
+  onOpenCopy,
+  onCloseTab,
+  onRemoveLink,
+  onDragStart,
+  onLinkDragOver,
+  onSectionDragOver,
+  onLinkDrop,
+  onSectionDrop,
+  onDragEnd,
 }: SectionRowProps) {
-  const [dragSourceId, setDragSourceId] = useState<string | null>(null);
-  const [dropOverId, setDropOverId] = useState<string | null>(null);
-  const [dropPlace, setDropPlace] = useState<DropPlace>("before");
   const openCount = links.filter((link) => runtimeByLinkId[link.id]?.isOpen).length;
   const total = links.length;
   const orderedLinks = [...links].sort((a, b) => a.order - b.order);
+  const isForeignTarget =
+    Boolean(dragSourceId) &&
+    dragSourceSectionId !== section.id &&
+    ((dropHint?.type === "section" && dropHint.sectionId === section.id) ||
+      (dropHint?.type === "link" && orderedLinks.some((link) => link.id === dropHint.linkId)));
 
   return (
-    <section className="section-block">
+    <section
+      className={`section-block ${isForeignTarget ? "is-drop-target" : ""}`}
+      onDragOver={(event) => {
+        if (!dragSourceId) {
+          return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        onSectionDragOver(section.id);
+      }}
+      onDrop={(event) => {
+        if (!dragSourceId) {
+          return;
+        }
+        event.preventDefault();
+        onSectionDrop(section.id);
+      }}
+    >
       <div className="section-row">
         <button
           type="button"
@@ -107,28 +150,23 @@ export function SectionRow({
                 key={link.id}
                 link={link}
                 runtime={runtimeByLinkId[link.id] ?? { isOpen: false }}
+                sections={sections}
                 dragging={dragSourceId === link.id}
-                dropPlace={dragSourceId && dropOverId === link.id && dragSourceId !== link.id ? dropPlace : null}
+                dropPlace={
+                  dragSourceId && dropHint?.type === "link" && dropHint.linkId === link.id && dragSourceId !== link.id
+                    ? dropHint.place
+                    : null
+                }
                 onOpen={onOpenLink}
                 onRename={onRenameLink}
-                onDragStart={(linkId) => {
-                  setDragSourceId(linkId);
-                }}
-                onDragOver={(linkId, place) => {
-                  setDropOverId(linkId);
-                  setDropPlace(place);
-                }}
-                onDrop={(targetId) => {
-                  if (dragSourceId) {
-                    void onReorderLinks(section.id, dragSourceId, targetId, dropPlace);
-                  }
-                  setDragSourceId(null);
-                  setDropOverId(null);
-                }}
-                onDragEnd={() => {
-                  setDragSourceId(null);
-                  setDropOverId(null);
-                }}
+                onMove={onMoveLink}
+                onOpenCopy={onOpenCopy}
+                onCloseTab={onCloseTab}
+                onRemove={onRemoveLink}
+                onDragStart={onDragStart}
+                onDragOver={onLinkDragOver}
+                onDrop={onLinkDrop}
+                onDragEnd={onDragEnd}
               />
             ))
           )}

@@ -1,16 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import type { RuntimeTabInfo, StoredLink } from "../types/tabdock";
+import type { RuntimeTabInfo, Section, StoredLink } from "../types/tabdock";
 import { displayTitle } from "../utils/link";
 import type { DropPlace } from "../utils/order";
-import { compactUrl, hostnameLetter } from "../utils/url";
+import { displayHostname, hostnameLetter } from "../utils/url";
+import { LinkMenu } from "./LinkMenu";
 
 type LinkRowProps = {
   link: StoredLink;
   runtime: RuntimeTabInfo;
+  sections: Section[];
   dragging: boolean;
   dropPlace: DropPlace | null;
   onOpen: (link: StoredLink) => Promise<void>;
   onRename: (linkId: string, name: string) => Promise<void>;
+  onMove: (linkId: string, sectionId: string) => Promise<void>;
+  onOpenCopy: (link: StoredLink) => Promise<void>;
+  onCloseTab: (link: StoredLink) => Promise<void>;
+  onRemove: (linkId: string) => Promise<void>;
   onDragStart: (linkId: string) => void;
   onDragOver: (linkId: string, place: DropPlace) => void;
   onDrop: (targetId: string) => void;
@@ -20,10 +26,15 @@ type LinkRowProps = {
 export function LinkRow({
   link,
   runtime,
+  sections,
   dragging,
   dropPlace,
   onOpen,
   onRename,
+  onMove,
+  onOpenCopy,
+  onCloseTab,
+  onRemove,
   onDragStart,
   onDragOver,
   onDrop,
@@ -31,11 +42,14 @@ export function LinkRow({
 }: LinkRowProps) {
   const [brokenIcon, setBrokenIcon] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const isOpen = runtime.isOpen;
   const showFavicon = Boolean(link.favIconUrl) && !brokenIcon;
   const title = displayTitle(link);
+  const hostname = displayHostname(link.url);
   const skipCommit = useRef(false);
 
   useEffect(() => {
@@ -45,6 +59,8 @@ export function LinkRow({
       inputRef.current?.select();
     }
   }, [editing]);
+
+  const closeMenu = () => setMenuOpen(false);
 
   const commitRename = () => {
     if (skipCommit.current) {
@@ -68,6 +84,7 @@ export function LinkRow({
       className={`link-row ${isOpen ? "is-open" : "is-closed"} ${editing ? "is-editing" : ""} ${dragging ? "is-dragging" : ""} ${dropClass}`}
       onDragOver={(event) => {
         event.preventDefault();
+        event.stopPropagation();
         event.dataTransfer.dropEffect = "move";
         const rect = event.currentTarget.getBoundingClientRect();
         const place: DropPlace = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
@@ -75,6 +92,7 @@ export function LinkRow({
       }}
       onDrop={(event) => {
         event.preventDefault();
+        event.stopPropagation();
         onDrop(link.id);
       }}
     >
@@ -85,12 +103,15 @@ export function LinkRow({
         aria-label={`Перетащить ${title}`}
         draggable={!editing}
         disabled={editing}
+        onClick={(event) => event.stopPropagation()}
         onDragStart={(event) => {
+          event.stopPropagation();
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", link.id);
           if (rowRef.current) {
             event.dataTransfer.setDragImage(rowRef.current, 20, 22);
           }
+          setMenuOpen(false);
           onDragStart(link.id);
         }}
         onDragEnd={onDragEnd}
@@ -154,18 +175,54 @@ export function LinkRow({
           >
             <span className="link-text">
               <span className="link-title">{title}</span>
-              <span className="link-url">{compactUrl(link.url)}</span>
+              <span className="link-url" title={link.url}>
+                {hostname}
+              </span>
             </span>
           </button>
           <button
+            ref={menuButtonRef}
             type="button"
-            className="icon-button link-rename"
-            title="Переименовать"
-            aria-label={`Переименовать ${title}`}
-            onClick={() => setEditing(true)}
+            className="icon-button link-menu-button"
+            title="Действия со ссылкой"
+            aria-label={`Действия со ссылкой ${title}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={(event) => {
+              event.stopPropagation();
+              setMenuOpen((open) => !open);
+            }}
           >
-            <RenameIcon />
+            <MoreIcon />
           </button>
+          <LinkMenu
+            open={menuOpen}
+            isOpenTab={isOpen}
+            sections={sections}
+            currentSectionId={link.sectionId}
+            anchorRef={menuButtonRef}
+            onClose={closeMenu}
+            onRename={() => {
+              closeMenu();
+              setEditing(true);
+            }}
+            onMove={(sectionId) => {
+              closeMenu();
+              void onMove(link.id, sectionId);
+            }}
+            onOpenCopy={() => {
+              closeMenu();
+              void onOpenCopy(link);
+            }}
+            onCloseTab={() => {
+              closeMenu();
+              void onCloseTab(link);
+            }}
+            onRemove={() => {
+              closeMenu();
+              void onRemove(link.id);
+            }}
+          />
         </>
       )}
     </div>
@@ -185,16 +242,12 @@ function DragHandleIcon() {
   );
 }
 
-function RenameIcon() {
+function MoreIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
-      <path
-        d="M8.2 2.4 11.6 5.8 5 12.4H1.6V9Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-      />
+      <circle cx="7" cy="3" r="1.2" fill="currentColor" />
+      <circle cx="7" cy="7" r="1.2" fill="currentColor" />
+      <circle cx="7" cy="11" r="1.2" fill="currentColor" />
     </svg>
   );
 }

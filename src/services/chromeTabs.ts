@@ -50,6 +50,10 @@ export async function openUrlInNewTab(url: string): Promise<chrome.tabs.Tab> {
   return chrome.tabs.create({ url, active: true });
 }
 
+export async function closeTab(tabId: number): Promise<void> {
+  await chrome.tabs.remove(tabId);
+}
+
 export async function openMissingSectionLinks(
   links: StoredLink[],
   tabs: chrome.tabs.Tab[],

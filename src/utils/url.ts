@@ -42,6 +42,15 @@ export function compactUrl(url: string): string {
   }
 }
 
+export function displayHostname(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./i, "");
+    return host || compactUrl(url);
+  } catch {
+    return compactUrl(url);
+  }
+}
+
 export function hostnameLetter(url: string): string {
   try {
     const host = new URL(url).hostname.replace(/^www\./, "");

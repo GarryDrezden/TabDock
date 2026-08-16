@@ -1,4 +1,10 @@
+import type { StoredLink } from "../types/tabdock";
+
 export type DropPlace = "before" | "after";
+
+export type LinkPlacement =
+  | { kind: "end" }
+  | { kind: "at"; targetLinkId: string; place: DropPlace };
 
 export function moveItemById<T extends { id: string }>(
   items: T[],
@@ -27,6 +33,16 @@ export function moveItemById<T extends { id: string }>(
   }
   next.splice(insertAt, 0, dragged);
   return next;
+}
+
+export function linksInSection(
+  links: StoredLink[],
+  sectionId: string,
+  exceptId?: string,
+): StoredLink[] {
+  return links
+    .filter((link) => link.sectionId === sectionId && link.id !== exceptId)
+    .sort((a, b) => a.order - b.order);
 }
 
 export function ordersEqual<T extends { id: string; order: number }>(left: T[], right: T[]): boolean {

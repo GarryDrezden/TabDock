@@ -6,6 +6,7 @@ import { Toast } from "./components/Toast";
 import { useChromeTabs } from "./hooks/useChromeTabs";
 import { useTabDockState } from "./hooks/useTabDockState";
 import {
+  closeTab,
   findTabByUrl,
   focusExistingTab,
   getActiveTab,
@@ -17,10 +18,22 @@ import {
 import { getChromePanelSide, PANEL_SIDE_HINT } from "./services/chromeSidePanel";
 import { useChromePanelSide } from "./hooks/useChromePanelSide";
 import type { PanelSide, StoredLink, ToastMessage } from "./types/tabdock";
+import type { LinkPlacement } from "./utils/order";
 
 export default function App() {
-  const { state, loading, loadError, createSection, toggleCollapsed, addLink, renameLink, reorderLinks, markOpened, setPanelSide } =
-    useTabDockState();
+  const {
+    state,
+    loading,
+    loadError,
+    createSection,
+    toggleCollapsed,
+    addLink,
+    renameLink,
+    placeLink,
+    removeLink,
+    markOpened,
+    setPanelSide,
+  } = useTabDockState();
   const { tabs, tabsReady } = useChromeTabs();
   const { chromeSide, refreshChromeSide } = useChromePanelSide();
   const [showNewSection, setShowNewSection] = useState(false);
@@ -115,6 +128,52 @@ export default function App() {
     }
   };
 
+  const handlePlaceLink = async (linkId: string, sectionId: string, placement: LinkPlacement) => {
+    try {
+      const result = await placeLink(linkId, sectionId, placement);
+      if (result.status === "duplicate") {
+        showToast(`Эта ссылка уже есть в разделе «${result.sectionName}»`);
+        return;
+      }
+      if (result.status === "ok" && result.fromSectionId !== result.toSectionId) {
+        showToast(`Перемещено в «${result.toSectionName}»`);
+      }
+    } catch {
+      showToast("Не удалось переместить ссылку", "error");
+    }
+  };
+
+  const handleOpenCopy = async (link: StoredLink) => {
+    try {
+      await openUrlInNewTab(link.url);
+      await markOpened([link.id]);
+    } catch {
+      showToast("Не удалось открыть копию", "error");
+    }
+  };
+
+  const handleCloseTab = async (link: StoredLink) => {
+    try {
+      const currentTabs = await chrome.tabs.query({});
+      const existing = findTabByUrl(currentTabs, link.url);
+      if (existing?.id === undefined) {
+        return;
+      }
+      await closeTab(existing.id);
+    } catch {
+      showToast("Не удалось закрыть вкладку", "error");
+    }
+  };
+
+  const handleRemoveLink = async (linkId: string) => {
+    try {
+      await removeLink(linkId);
+      showToast("Удалено из TabDock");
+    } catch {
+      showToast("Не удалось удалить ссылку", "error");
+    }
+  };
+
   const handleOpenAll = async (sectionId: string) => {
     if (!state) {
       return;
@@ -196,13 +255,10 @@ export default function App() {
                 showToast("Не удалось переименовать ссылку", "error");
               }
             }}
-            onReorderLinks={async (sectionId, draggedId, targetId, place) => {
-              try {
-                await reorderLinks(sectionId, draggedId, targetId, place);
-              } catch {
-                showToast("Не удалось изменить порядок", "error");
-              }
-            }}
+            onPlaceLink={handlePlaceLink}
+            onOpenCopy={handleOpenCopy}
+            onCloseTab={handleCloseTab}
+            onRemoveLink={handleRemoveLink}
           />
         )}
       </main>

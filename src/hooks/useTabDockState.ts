@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { loadState, saveState } from "../services/storage";
-import type { PanelSide, Section, StoredLink, TabDockState } from "../types/tabdock";
+import type { PanelSide, PlaceLinkResult, Section, StoredLink, TabDockState } from "../types/tabdock";
 import { createId } from "../utils/ids";
-import { moveItemById, ordersEqual, type DropPlace } from "../utils/order";
+import { linksInSection, moveItemById, ordersEqual, type LinkPlacement } from "../utils/order";
+import { urlsMatch } from "../utils/url";
 
 const DEFAULT_SECTION_ICON = "📁";
 
@@ -53,9 +54,9 @@ export function useTabDockState() {
   }, []);
 
   const persist = useCallback(async (next: TabDockState) => {
-    setState(next);
     try {
       await saveState(next);
+      setState(next);
     } catch {
       throw new Error("Не удалось сохранить данные TabDock");
     }
@@ -187,31 +188,118 @@ export function useTabDockState() {
     [persist, state],
   );
 
-  const reorderLinks = useCallback(
-    async (sectionId: string, draggedId: string, targetId: string, place: DropPlace) => {
+  const placeLink = useCallback(
+    async (linkId: string, targetSectionId: string, placement: LinkPlacement): Promise<PlaceLinkResult> => {
       if (!state) {
         throw new Error("TabDock ещё не загружен");
       }
 
-      const sectionLinks = state.links
-        .filter((link) => link.sectionId === sectionId)
-        .sort((a, b) => a.order - b.order);
-      const reordered = moveItemById(sectionLinks, draggedId, targetId, place).map((link, index) => ({
-        ...link,
-        order: index,
-      }));
-
-      if (ordersEqual(sectionLinks, reordered)) {
-        return;
+      const link = state.links.find((item) => item.id === linkId);
+      const targetSection = state.sections.find((section) => section.id === targetSectionId);
+      if (!link || !targetSection) {
+        return { status: "missing" };
       }
 
-      const nextOrder = new Map(reordered.map((link) => [link.id, link.order]));
+      const fromSectionId = link.sectionId;
+      const crossing = fromSectionId !== targetSectionId;
+
+      if (crossing) {
+        const duplicate = state.links.some(
+          (other) =>
+            other.id !== linkId &&
+            other.sectionId === targetSectionId &&
+            urlsMatch(other.url, link.url),
+        );
+        if (duplicate) {
+          return { status: "duplicate", sectionName: targetSection.name };
+        }
+      }
+
+      const withIndex = (sectionId: string, ordered: StoredLink[]) =>
+        ordered.map((item, index) => ({
+          ...item,
+          sectionId,
+          order: index,
+        }));
+
+      let nextLinks: StoredLink[];
+
+      if (!crossing) {
+        const sectionLinks = linksInSection(state.links, fromSectionId);
+        const reordered =
+          placement.kind === "end"
+            ? [...sectionLinks.filter((item) => item.id !== linkId), link]
+            : moveItemById(sectionLinks, linkId, placement.targetLinkId, placement.place);
+        const indexed = withIndex(fromSectionId, reordered);
+        if (ordersEqual(sectionLinks, indexed)) {
+          return { status: "noop" };
+        }
+        const nextOrder = new Map(indexed.map((item) => [item.id, item.order]));
+        nextLinks = state.links.map((item) => {
+          const order = nextOrder.get(item.id);
+          return order === undefined ? item : { ...item, order };
+        });
+      } else {
+        const sourceLinks = withIndex(fromSectionId, linksInSection(state.links, fromSectionId, linkId));
+        const targetLinks = linksInSection(state.links, targetSectionId);
+        const moving = { ...link, sectionId: targetSectionId };
+        let inserted: StoredLink[];
+        if (placement.kind === "end") {
+          inserted = [...targetLinks, moving];
+        } else {
+          const targetIndex = targetLinks.findIndex((item) => item.id === placement.targetLinkId);
+          if (targetIndex < 0) {
+            inserted = [...targetLinks, moving];
+          } else {
+            const insertAt = placement.place === "after" ? targetIndex + 1 : targetIndex;
+            inserted = [...targetLinks.slice(0, insertAt), moving, ...targetLinks.slice(insertAt)];
+          }
+        }
+        const targetIndexed = withIndex(targetSectionId, inserted);
+        const byId = new Map(
+          [...sourceLinks, ...targetIndexed].map((item) => [item.id, item] as const),
+        );
+        nextLinks = state.links.map((item) => byId.get(item.id) ?? item);
+      }
 
       await persist({
         ...state,
-        links: state.links.map((link) => {
-          const order = nextOrder.get(link.id);
-          return order === undefined ? link : { ...link, order };
+        links: nextLinks,
+      });
+
+      return {
+        status: "ok",
+        fromSectionId,
+        toSectionId: targetSectionId,
+        toSectionName: targetSection.name,
+      };
+    },
+    [persist, state],
+  );
+
+  const removeLink = useCallback(
+    async (linkId: string) => {
+      if (!state) {
+        throw new Error("TabDock ещё не загружен");
+      }
+
+      const link = state.links.find((item) => item.id === linkId);
+      if (!link) {
+        return;
+      }
+
+      const remaining = state.links.filter((item) => item.id !== linkId);
+      const reindexed = linksInSection(remaining, link.sectionId).map((item, index) => ({
+        ...item,
+        order: index,
+      }));
+      const nextOrder = new Map(reindexed.map((item) => [item.id, item.order]));
+
+      await persist({
+        ...state,
+        links: remaining.map((item) => {
+          const order = nextOrder.get(item.id);
+          return order === undefined ? item : { ...item, order };
         }),
       });
     },
@@ -240,7 +328,8 @@ export function useTabDockState() {
     toggleCollapsed,
     addLink,
     renameLink,
-    reorderLinks,
+    placeLink,
+    removeLink,
     markOpened,
     setPanelSide,
   };
