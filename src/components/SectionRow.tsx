@@ -10,6 +10,7 @@ type SectionRowProps = {
   onAddCurrent: (sectionId: string) => void;
   onOpenAll: (sectionId: string) => void;
   onOpenLink: (link: StoredLink) => Promise<void>;
+  onRenameLink: (linkId: string, name: string) => Promise<void>;
 };
 
 export function SectionRow({
@@ -21,6 +22,7 @@ export function SectionRow({
   onAddCurrent,
   onOpenAll,
   onOpenLink,
+  onRenameLink,
 }: SectionRowProps) {
   const openCount = links.filter((link) => runtimeByLinkId[link.id]?.isOpen).length;
   const total = links.length;
@@ -94,6 +96,7 @@ export function SectionRow({
                 link={link}
                 runtime={runtimeByLinkId[link.id] ?? { isOpen: false }}
                 onOpen={onOpenLink}
+                onRename={onRenameLink}
               />
             ))
           )}

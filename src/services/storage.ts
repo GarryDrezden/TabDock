@@ -20,8 +20,36 @@ export function normalizeState(raw: unknown): TabDockState {
   return {
     version: 1,
     sections: Array.isArray(raw.sections) ? (raw.sections as TabDockState["sections"]) : [],
-    links: Array.isArray(raw.links) ? (raw.links as TabDockState["links"]) : [],
+    links: Array.isArray(raw.links)
+      ? raw.links.flatMap((item) => {
+          const link = normalizeLink(item);
+          return link ? [link] : [];
+        })
+      : [],
     panelSide: raw.panelSide === "left" || raw.panelSide === "right" ? raw.panelSide : undefined,
+  };
+}
+
+function normalizeLink(value: unknown): TabDockState["links"][number] | null {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.sectionId !== "string") {
+    return null;
+  }
+  if (typeof value.url !== "string" || typeof value.title !== "string") {
+    return null;
+  }
+
+  const customTitle = typeof value.customTitle === "string" ? value.customTitle.trim() : "";
+
+  return {
+    id: value.id,
+    sectionId: value.sectionId,
+    url: value.url,
+    title: value.title,
+    customTitle: customTitle || undefined,
+    favIconUrl: typeof value.favIconUrl === "string" ? value.favIconUrl : undefined,
+    order: typeof value.order === "number" ? value.order : 0,
+    createdAt: typeof value.createdAt === "number" ? value.createdAt : 0,
+    lastOpenedAt: typeof value.lastOpenedAt === "number" ? value.lastOpenedAt : undefined,
   };
 }
 

@@ -166,6 +166,26 @@ export function useTabDockState() {
     [persist, state],
   );
 
+  const renameLink = useCallback(
+    async (linkId: string, name: string) => {
+      if (!state) {
+        throw new Error("TabDock ещё не загружен");
+      }
+
+      const trimmed = name.trim();
+
+      await persist({
+        ...state,
+        links: state.links.map((link) =>
+          link.id === linkId
+            ? { ...link, customTitle: trimmed || undefined }
+            : link,
+        ),
+      });
+    },
+    [persist, state],
+  );
+
   const setPanelSide = useCallback(
     async (panelSide: PanelSide) => {
       if (!state) {
@@ -187,6 +207,7 @@ export function useTabDockState() {
     createSection,
     toggleCollapsed,
     addLink,
+    renameLink,
     markOpened,
     setPanelSide,
   };

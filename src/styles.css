@@ -348,25 +348,60 @@ button:focus:not(:focus-visible) {
 .link-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   min-height: 46px;
-  padding: 6px 8px 6px 12px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
+  padding: 6px 4px 6px 12px;
   border-radius: 6px;
   min-width: 0;
 }
 
 .link-row:hover,
-.link-row:focus-visible {
+.link-row:focus-within {
   background: var(--surface-hover);
 }
 
 .link-row.is-closed {
   color: var(--text-secondary);
+}
+
+.link-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  border-radius: 6px;
+}
+
+.link-rename {
+  opacity: 0.55;
+}
+
+.link-row:hover .link-rename,
+.link-row:focus-within .link-rename {
+  opacity: 1;
+}
+
+.link-rename-form {
+  min-width: 0;
+  flex: 1;
+}
+
+.link-rename-input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-primary);
+  padding: 0 8px;
+  font-size: 13px;
 }
 
 .status-dot {

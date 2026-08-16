@@ -11,6 +11,7 @@ export type StoredLink = {
   sectionId: string;
   url: string;
   title: string;
+  customTitle?: string;
   favIconUrl?: string;
   order: number;
   createdAt: number;

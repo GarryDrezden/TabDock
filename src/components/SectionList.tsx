@@ -10,6 +10,7 @@ type SectionListProps = {
   onAddCurrent: (sectionId: string) => void;
   onOpenAll: (sectionId: string) => void;
   onOpenLink: (link: StoredLink) => Promise<void>;
+  onRenameLink: (linkId: string, name: string) => Promise<void>;
 };
 
 export function SectionList({
@@ -21,6 +22,7 @@ export function SectionList({
   onAddCurrent,
   onOpenAll,
   onOpenLink,
+  onRenameLink,
 }: SectionListProps) {
   const orderedSections = [...sections].sort((a, b) => a.order - b.order);
 
@@ -37,6 +39,7 @@ export function SectionList({
           onAddCurrent={onAddCurrent}
           onOpenAll={onOpenAll}
           onOpenLink={onOpenLink}
+          onRenameLink={onRenameLink}
         />
       ))}
     </div>
