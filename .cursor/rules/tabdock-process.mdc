@@ -1,0 +1,11 @@
+---
+description: TabDock process — changelog and push after changes
+alwaysApply: true
+---
+
+# TabDock process
+
+1. Any product, code, or behavior change must be recorded in `CHANGELOG.md`.
+2. After making changes, commit and push to `origin/main` immediately, unless the user says otherwise.
+
+Do not rewrite `PRODUCT.md` to match an implementation. Follow `DEVELOPMENT.md`.
