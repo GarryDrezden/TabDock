@@ -19,7 +19,7 @@ import { useChromePanelSide } from "./hooks/useChromePanelSide";
 import type { PanelSide, StoredLink, ToastMessage } from "./types/tabdock";
 
 export default function App() {
-  const { state, loading, loadError, createSection, toggleCollapsed, addLink, renameLink, markOpened, setPanelSide } =
+  const { state, loading, loadError, createSection, toggleCollapsed, addLink, renameLink, reorderLinks, markOpened, setPanelSide } =
     useTabDockState();
   const { tabs, tabsReady } = useChromeTabs();
   const { chromeSide, refreshChromeSide } = useChromePanelSide();
@@ -194,6 +194,13 @@ export default function App() {
                 await renameLink(linkId, name);
               } catch {
                 showToast("Не удалось переименовать ссылку", "error");
+              }
+            }}
+            onReorderLinks={async (sectionId, draggedId, targetId, place) => {
+              try {
+                await reorderLinks(sectionId, draggedId, targetId, place);
+              } catch {
+                showToast("Не удалось изменить порядок", "error");
               }
             }}
           />

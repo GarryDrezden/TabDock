@@ -1,4 +1,5 @@
 import type { RuntimeTabInfo, Section, StoredLink } from "../types/tabdock";
+import type { DropPlace } from "../utils/order";
 import { SectionRow } from "./SectionRow";
 
 type SectionListProps = {
@@ -11,6 +12,12 @@ type SectionListProps = {
   onOpenAll: (sectionId: string) => void;
   onOpenLink: (link: StoredLink) => Promise<void>;
   onRenameLink: (linkId: string, name: string) => Promise<void>;
+  onReorderLinks: (
+    sectionId: string,
+    draggedId: string,
+    targetId: string,
+    place: DropPlace,
+  ) => Promise<void>;
 };
 
 export function SectionList({
@@ -23,6 +30,7 @@ export function SectionList({
   onOpenAll,
   onOpenLink,
   onRenameLink,
+  onReorderLinks,
 }: SectionListProps) {
   const orderedSections = [...sections].sort((a, b) => a.order - b.order);
 
@@ -40,6 +48,7 @@ export function SectionList({
           onOpenAll={onOpenAll}
           onOpenLink={onOpenLink}
           onRenameLink={onRenameLink}
+          onReorderLinks={onReorderLinks}
         />
       ))}
     </div>

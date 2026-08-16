@@ -351,9 +351,51 @@ button:focus:not(:focus-visible) {
   gap: 8px;
   width: 100%;
   min-height: 46px;
-  padding: 6px 4px 6px 12px;
+  padding: 6px 4px 6px 4px;
   border-radius: 6px;
   min-width: 0;
+  position: relative;
+}
+
+.link-row.is-dragging {
+  opacity: 0.4;
+}
+
+.link-row.drop-before::before,
+.link-row.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.link-row.drop-before::before {
+  top: 0;
+}
+
+.link-row.drop-after::after {
+  bottom: 0;
+}
+
+.link-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  width: 22px;
+  opacity: 0.55;
+}
+
+.link-handle:active {
+  cursor: grabbing;
+}
+
+.link-row:hover .link-handle,
+.link-row:focus-within .link-handle,
+.link-row:hover .link-rename,
+.link-row:focus-within .link-rename {
+  opacity: 1;
 }
 
 .link-row:hover,

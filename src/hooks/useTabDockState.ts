@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { loadState, saveState } from "../services/storage";
 import type { PanelSide, Section, StoredLink, TabDockState } from "../types/tabdock";
 import { createId } from "../utils/ids";
+import { moveItemById, ordersEqual, type DropPlace } from "../utils/order";
 
 const DEFAULT_SECTION_ICON = "📁";
 
@@ -186,6 +187,37 @@ export function useTabDockState() {
     [persist, state],
   );
 
+  const reorderLinks = useCallback(
+    async (sectionId: string, draggedId: string, targetId: string, place: DropPlace) => {
+      if (!state) {
+        throw new Error("TabDock ещё не загружен");
+      }
+
+      const sectionLinks = state.links
+        .filter((link) => link.sectionId === sectionId)
+        .sort((a, b) => a.order - b.order);
+      const reordered = moveItemById(sectionLinks, draggedId, targetId, place).map((link, index) => ({
+        ...link,
+        order: index,
+      }));
+
+      if (ordersEqual(sectionLinks, reordered)) {
+        return;
+      }
+
+      const nextOrder = new Map(reordered.map((link) => [link.id, link.order]));
+
+      await persist({
+        ...state,
+        links: state.links.map((link) => {
+          const order = nextOrder.get(link.id);
+          return order === undefined ? link : { ...link, order };
+        }),
+      });
+    },
+    [persist, state],
+  );
+
   const setPanelSide = useCallback(
     async (panelSide: PanelSide) => {
       if (!state) {
@@ -208,6 +240,7 @@ export function useTabDockState() {
     toggleCollapsed,
     addLink,
     renameLink,
+    reorderLinks,
     markOpened,
     setPanelSide,
   };

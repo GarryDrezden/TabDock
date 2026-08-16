@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { RuntimeTabInfo, Section, StoredLink } from "../types/tabdock";
+import type { DropPlace } from "../utils/order";
 import { LinkRow } from "./LinkRow";
 
 type SectionRowProps = {
@@ -11,6 +13,12 @@ type SectionRowProps = {
   onOpenAll: (sectionId: string) => void;
   onOpenLink: (link: StoredLink) => Promise<void>;
   onRenameLink: (linkId: string, name: string) => Promise<void>;
+  onReorderLinks: (
+    sectionId: string,
+    draggedId: string,
+    targetId: string,
+    place: DropPlace,
+  ) => Promise<void>;
 };
 
 export function SectionRow({
@@ -23,7 +31,11 @@ export function SectionRow({
   onOpenAll,
   onOpenLink,
   onRenameLink,
+  onReorderLinks,
 }: SectionRowProps) {
+  const [dragSourceId, setDragSourceId] = useState<string | null>(null);
+  const [dropOverId, setDropOverId] = useState<string | null>(null);
+  const [dropPlace, setDropPlace] = useState<DropPlace>("before");
   const openCount = links.filter((link) => runtimeByLinkId[link.id]?.isOpen).length;
   const total = links.length;
   const orderedLinks = [...links].sort((a, b) => a.order - b.order);
@@ -95,8 +107,28 @@ export function SectionRow({
                 key={link.id}
                 link={link}
                 runtime={runtimeByLinkId[link.id] ?? { isOpen: false }}
+                dragging={dragSourceId === link.id}
+                dropPlace={dragSourceId && dropOverId === link.id && dragSourceId !== link.id ? dropPlace : null}
                 onOpen={onOpenLink}
                 onRename={onRenameLink}
+                onDragStart={(linkId) => {
+                  setDragSourceId(linkId);
+                }}
+                onDragOver={(linkId, place) => {
+                  setDropOverId(linkId);
+                  setDropPlace(place);
+                }}
+                onDrop={(targetId) => {
+                  if (dragSourceId) {
+                    void onReorderLinks(section.id, dragSourceId, targetId, dropPlace);
+                  }
+                  setDragSourceId(null);
+                  setDropOverId(null);
+                }}
+                onDragEnd={() => {
+                  setDragSourceId(null);
+                  setDropOverId(null);
+                }}
               />
             ))
           )}
