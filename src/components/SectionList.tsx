@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { RuntimeTabInfo, Section, StoredLink } from "../types/tabdock";
 import type { LinkPlacement } from "../utils/order";
+import { sortSectionsForDisplay } from "../utils/section";
 import { SectionRow, type DropHint } from "./SectionRow";
 
 type SectionListProps = {
@@ -9,7 +10,7 @@ type SectionListProps = {
   runtimeByLinkId: Record<string, RuntimeTabInfo>;
   openingSectionId: string | null;
   onToggle: (sectionId: string) => void;
-  onAddCurrent: (sectionId: string) => void;
+  onAddCurrent: (sectionId: string, closeAfter?: boolean) => void;
   onOpenAll: (sectionId: string) => void;
   onOpenLink: (link: StoredLink) => Promise<void>;
   onRenameLink: (linkId: string, name: string) => Promise<void>;
@@ -38,7 +39,7 @@ export function SectionList({
   const [dropHint, setDropHint] = useState<DropHint | null>(null);
   const dragSourceIdRef = useRef<string | null>(null);
   const dropHintRef = useRef<DropHint | null>(null);
-  const orderedSections = [...sections].sort((a, b) => a.order - b.order);
+  const orderedSections = sortSectionsForDisplay(sections);
   const dragSourceSectionId = links.find((link) => link.id === dragSourceId)?.sectionId ?? null;
 
   const setHint = (hint: DropHint | null) => {

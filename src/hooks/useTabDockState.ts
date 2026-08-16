@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { loadState, saveState } from "../services/storage";
+import { loadState, normalizeState, saveState } from "../services/storage";
 import type { PanelSide, PlaceLinkResult, Section, StoredLink, TabDockState } from "../types/tabdock";
 import { createId } from "../utils/ids";
 import { linksInSection, moveItemById, ordersEqual, type LinkPlacement } from "../utils/order";
+import { ensureTemporarySection, isTemporarySection } from "../utils/section";
 import { urlsMatch } from "../utils/url";
 
 const DEFAULT_SECTION_ICON = "📁";
@@ -40,9 +41,9 @@ export function useTabDockState() {
       if (areaName !== "local" || !changes.tabDockState) {
         return;
       }
-      const next = changes.tabDockState.newValue as TabDockState | undefined;
+      const next = changes.tabDockState.newValue as unknown;
       if (next) {
-        setState(next);
+        setState(ensureTemporarySection(normalizeState(next)).state);
       }
     };
 
@@ -73,10 +74,9 @@ export function useTabDockState() {
         return;
       }
 
-      const maxOrder = state.sections.reduce(
-        (max, section) => Math.max(max, section.order),
-        -1,
-      );
+      const maxOrder = state.sections
+        .filter((section) => !isTemporarySection(section))
+        .reduce((max, section) => Math.max(max, section.order), -1);
 
       const section: Section = {
         id: createId(),
@@ -119,7 +119,7 @@ export function useTabDockState() {
       }
 
       const exists = state.links.some(
-        (link) => link.sectionId === sectionId && link.url === input.url,
+        (link) => link.sectionId === sectionId && urlsMatch(link.url, input.url),
       );
       if (exists) {
         return "duplicate" as const;

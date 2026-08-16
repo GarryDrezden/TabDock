@@ -1,5 +1,6 @@
 import type { RuntimeTabInfo, Section, StoredLink } from "../types/tabdock";
 import type { DropPlace } from "../utils/order";
+import { isTemporarySection } from "../utils/section";
 import { LinkRow } from "./LinkRow";
 
 export type DropHint =
@@ -16,7 +17,7 @@ type SectionRowProps = {
   dragSourceSectionId: string | null;
   dropHint: DropHint | null;
   onToggle: (sectionId: string) => void;
-  onAddCurrent: (sectionId: string) => void;
+  onAddCurrent: (sectionId: string, closeAfter?: boolean) => void;
   onOpenAll: (sectionId: string) => void;
   onOpenLink: (link: StoredLink) => Promise<void>;
   onRenameLink: (linkId: string, name: string) => Promise<void>;
@@ -57,6 +58,7 @@ export function SectionRow({
   onSectionDrop,
   onDragEnd,
 }: SectionRowProps) {
+  const isTemporary = isTemporarySection(section);
   const openCount = links.filter((link) => runtimeByLinkId[link.id]?.isOpen).length;
   const total = links.length;
   const orderedLinks = [...links].sort((a, b) => a.order - b.order);
@@ -68,7 +70,7 @@ export function SectionRow({
 
   return (
     <section
-      className={`section-block ${isForeignTarget ? "is-drop-target" : ""}`}
+      className={`section-block ${isTemporary ? "is-temporary" : ""} ${isForeignTarget ? "is-drop-target" : ""}`}
       onDragOver={(event) => {
         if (!dragSourceId) {
           return;
@@ -113,36 +115,49 @@ export function SectionRow({
           <button
             type="button"
             className="icon-button"
-            onClick={() => onAddCurrent(section.id)}
-            title="Добавить текущую вкладку"
-            aria-label={`Добавить текущую вкладку в ${section.name}`}
+            onClick={(event) => onAddCurrent(section.id, event.shiftKey)}
+            title="Добавить текущую вкладку · Shift+клик — сохранить и закрыть"
+            aria-label={`Добавить текущую вкладку в ${section.name}. Shift+клик — сохранить и закрыть`}
           >
             <PlusIcon />
           </button>
-          <button
-            type="button"
-            className="icon-button"
-            onClick={() => onOpenAll(section.id)}
-            title="Открыть всё"
-            aria-label={`Открыть все страницы раздела ${section.name}`}
-            disabled={opening || total === 0}
-          >
-            {opening ? <span className="mini-spinner" aria-hidden="true" /> : <PlayIcon />}
-          </button>
+          {!isTemporary && (
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => onOpenAll(section.id)}
+              title="Открыть всё"
+              aria-label={`Открыть все страницы раздела ${section.name}`}
+              disabled={opening || total === 0}
+            >
+              {opening ? <span className="mini-spinner" aria-hidden="true" /> : <PlayIcon />}
+            </button>
+          )}
         </div>
       </div>
       {!section.collapsed && (
         <div className="link-list">
           {orderedLinks.length === 0 ? (
             <div className="empty-section">
-              <p>Пока нет сохранённых страниц</p>
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => onAddCurrent(section.id)}
-              >
-                + Добавить текущую вкладку
-              </button>
+              {isTemporary ? (
+                <>
+                  <p>Здесь появятся отложенные страницы</p>
+                  <p className="empty-section-hint">
+                    Нажмите кнопку в шапке, чтобы сохранить текущую вкладку и закрыть её
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>Пока нет сохранённых страниц</p>
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => onAddCurrent(section.id)}
+                  >
+                    + Добавить текущую вкладку
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             orderedLinks.map((link) => (

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { Section } from "../types/tabdock";
+import { sortSectionsForDisplay } from "../utils/section";
 
 type MenuView = "root" | "move" | "confirm";
 
@@ -34,9 +35,9 @@ export function LinkMenu({
   const [view, setView] = useState<MenuView>("root");
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const [ready, setReady] = useState(false);
-  const otherSections = [...sections]
-    .filter((section) => section.id !== currentSectionId)
-    .sort((a, b) => a.order - b.order);
+  const otherSections = sortSectionsForDisplay(sections).filter(
+    (section) => section.id !== currentSectionId,
+  );
 
   useEffect(() => {
     if (!open) {

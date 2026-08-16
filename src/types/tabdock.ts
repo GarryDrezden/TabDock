@@ -1,9 +1,12 @@
+export type SectionKind = "user" | "temporary";
+
 export type Section = {
   id: string;
   name: string;
   icon: string;
   order: number;
   collapsed: boolean;
+  kind?: SectionKind;
 };
 
 export type StoredLink = {

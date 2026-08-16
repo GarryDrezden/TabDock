@@ -19,6 +19,8 @@ import { getChromePanelSide, PANEL_SIDE_HINT } from "./services/chromeSidePanel"
 import { useChromePanelSide } from "./hooks/useChromePanelSide";
 import type { PanelSide, StoredLink, ToastMessage } from "./types/tabdock";
 import type { LinkPlacement } from "./utils/order";
+import { findTemporarySection, isTemporarySection } from "./utils/section";
+import { urlsMatch } from "./utils/url";
 
 export default function App() {
   const {
@@ -93,23 +95,106 @@ export default function App() {
     }
   };
 
-  const handleAddCurrent = async (sectionId: string) => {
+  const handleAddCurrent = async (sectionId: string, closeAfter = false) => {
     try {
       const tab = await getActiveTab();
+      const tabId = tab?.id;
       const payload = readSavableTab(tab);
       if (!payload) {
-        showToast("Невозможно сохранить текущую вкладку", "error");
+        showToast("Эту страницу нельзя сохранить в TabDock", "error");
         return;
       }
 
       const result = await addLink(sectionId, payload);
-      if (result === "duplicate") {
-        showToast("Уже сохранено в этом разделе");
+      if (!closeAfter) {
+        if (result === "duplicate") {
+          showToast("Уже сохранено в этом разделе");
+          return;
+        }
+        showToast("Ссылка добавлена");
         return;
       }
-      showToast("Ссылка добавлена");
+
+      await closeCapturedTab(
+        tabId,
+        result === "duplicate" ? "Уже сохранено здесь — вкладка закрыта" : "Сохранено и закрыто",
+        result === "duplicate" ? "Уже сохранено здесь" : "Сохранено",
+      );
     } catch {
       showToast("Не удалось сохранить вкладку", "error");
+    }
+  };
+
+  const handleDeferCurrent = async () => {
+    if (!state) {
+      return;
+    }
+
+    try {
+      const tab = await getActiveTab();
+      const tabId = tab?.id;
+      const payload = readSavableTab(tab);
+      if (!payload) {
+        showToast("Эту страницу нельзя сохранить в TabDock", "error");
+        return;
+      }
+
+      const temporary = findTemporarySection(state.sections);
+      if (!temporary) {
+        showToast("Не удалось сохранить вкладку", "error");
+        return;
+      }
+
+      const matches = state.links.filter((link) => urlsMatch(link.url, payload.url));
+      const inTemporary = matches.some((link) => link.sectionId === temporary.id);
+      const inUser = matches.filter((link) => {
+        const section = state.sections.find((item) => item.id === link.sectionId);
+        return section ? !isTemporarySection(section) : link.sectionId !== temporary.id;
+      });
+
+      let closedMessage = "Отложено";
+      let openMessage = "Отложено";
+
+      if (inTemporary) {
+        closedMessage = "Уже во «Временном» — вкладка закрыта";
+        openMessage = "Уже во «Временном»";
+      } else if (inUser.length === 1) {
+        const sectionName =
+          state.sections.find((section) => section.id === inUser[0]?.sectionId)?.name ?? "разделе";
+        closedMessage = `Уже сохранено в «${sectionName}» — вкладка закрыта`;
+        openMessage = `Уже сохранено в «${sectionName}»`;
+      } else if (inUser.length > 1) {
+        closedMessage = "Уже сохранено в TabDock — вкладка закрыта";
+        openMessage = "Уже сохранено в TabDock";
+      } else {
+        const result = await addLink(temporary.id, payload);
+        if (result === "duplicate") {
+          closedMessage = "Уже во «Временном» — вкладка закрыта";
+          openMessage = "Уже во «Временном»";
+        }
+      }
+
+      await closeCapturedTab(tabId, closedMessage, openMessage);
+    } catch {
+      showToast("Не удалось сохранить вкладку", "error");
+    }
+  };
+
+  const closeCapturedTab = async (
+    tabId: number | undefined,
+    closedMessage: string,
+    stillOpenMessage: string,
+  ) => {
+    if (tabId === undefined) {
+      showToast(`${stillOpenMessage}. Не удалось закрыть вкладку`, "error");
+      return;
+    }
+
+    try {
+      await closeTab(tabId);
+      showToast(closedMessage);
+    } catch {
+      showToast(`${stillOpenMessage}. Не удалось закрыть вкладку`, "error");
     }
   };
 
@@ -201,6 +286,9 @@ export default function App() {
       <AppHeader
         panelSide={chromeSide ?? state?.panelSide ?? "right"}
         onAddSection={() => setShowNewSection(true)}
+        onDeferCurrent={() => {
+          void handleDeferCurrent();
+        }}
         onPanelSideChange={(side) => {
           void handlePanelSideChange(side);
         }}
@@ -216,23 +304,7 @@ export default function App() {
       <main className="app-body">
         {!ready && !loadError && <div className="loading-state">Загрузка…</div>}
         {loadError && <div className="loading-state">{loadError}</div>}
-        {ready && state && state.sections.length === 0 && (
-          <div className="empty-app">
-            <p className="empty-title">TabDock пока пуст.</p>
-            <p className="empty-copy">
-              Создайте первый раздел и добавьте в него страницы, которые хотите держать под
-              рукой.
-            </p>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => setShowNewSection(true)}
-            >
-              + Создать раздел
-            </button>
-          </div>
-        )}
-        {ready && state && state.sections.length > 0 && (
+        {ready && state && (
           <SectionList
             sections={state.sections}
             links={state.links}
@@ -241,8 +313,8 @@ export default function App() {
             onToggle={(sectionId) => {
               void toggleCollapsed(sectionId);
             }}
-            onAddCurrent={(sectionId) => {
-              void handleAddCurrent(sectionId);
+            onAddCurrent={(sectionId, closeAfter) => {
+              void handleAddCurrent(sectionId, closeAfter);
             }}
             onOpenAll={(sectionId) => {
               void handleOpenAll(sectionId);

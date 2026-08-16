@@ -55,11 +55,11 @@ button {
 .app-header {
   height: var(--header-height);
   min-height: var(--header-height);
-  padding: 0 12px 0 14px;
+  padding: 0 10px 0 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -251,6 +251,12 @@ button:focus:not(:focus-visible) {
   margin: 0 0 8px;
 }
 
+.empty-section-hint {
+  margin: 0 !important;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .section-list {
   display: flex;
   flex-direction: column;
@@ -260,6 +266,12 @@ button:focus:not(:focus-visible) {
 .section-block {
   min-width: 0;
   border-radius: var(--radius);
+}
+
+.section-block.is-temporary {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 
 .section-block.is-drop-target {

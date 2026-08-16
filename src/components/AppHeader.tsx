@@ -5,10 +5,16 @@ import type { PanelSide } from "../types/tabdock";
 type AppHeaderProps = {
   panelSide: PanelSide;
   onAddSection: () => void;
+  onDeferCurrent: () => void;
   onPanelSideChange: (side: PanelSide) => void;
 };
 
-export function AppHeader({ panelSide, onAddSection, onPanelSideChange }: AppHeaderProps) {
+export function AppHeader({
+  panelSide,
+  onAddSection,
+  onDeferCurrent,
+  onPanelSideChange,
+}: AppHeaderProps) {
   return (
     <header className="app-header">
       <div className="brand">
@@ -21,6 +27,15 @@ export function AppHeader({ panelSide, onAddSection, onPanelSideChange }: AppHea
         <PanelSideToggle activeSide={panelSide} onSelect={onPanelSideChange} />
         <button
           type="button"
+          className="icon-button"
+          onClick={onDeferCurrent}
+          title="Отложить текущую вкладку"
+          aria-label="Отложить текущую вкладку"
+        >
+          <DeferIcon />
+        </button>
+        <button
+          type="button"
           className="icon-button accent"
           onClick={onAddSection}
           title="Создать раздел"
@@ -30,6 +45,35 @@ export function AppHeader({ panelSide, onAddSection, onPanelSideChange }: AppHea
         </button>
       </div>
     </header>
+  );
+}
+
+function DeferIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" focusable="false">
+      <path
+        d="M9 2.6v7.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6.2 7.4 9 10.2l2.8-2.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3.2 9.4h2.2l1.5 2h4.2l1.5-2h2.2V15H3.2V9.4Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
