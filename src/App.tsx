@@ -7,6 +7,7 @@ import { useChromeTabs } from "./hooks/useChromeTabs";
 import { useTabDockState } from "./hooks/useTabDockState";
 import {
   closeTab,
+  closeTabsMatchingUrls,
   findTabByUrl,
   focusExistingTab,
   getActiveTab,
@@ -18,7 +19,7 @@ import {
 import { getChromePanelSide, PANEL_SIDE_HINT } from "./services/chromeSidePanel";
 import { useChromePanelSide } from "./hooks/useChromePanelSide";
 import type { PanelSide, StoredLink, ToastMessage } from "./types/tabdock";
-import type { LinkPlacement } from "./utils/order";
+import type { DropPlace, LinkPlacement } from "./utils/order";
 import { findTemporarySection, isTemporarySection } from "./utils/section";
 import { urlsMatch } from "./utils/url";
 
@@ -31,6 +32,10 @@ export default function App() {
     toggleCollapsed,
     addLink,
     renameLink,
+    renameSection,
+    setSectionIcon,
+    deleteSection,
+    reorderSections,
     placeLink,
     removeLink,
     markOpened,
@@ -259,6 +264,55 @@ export default function App() {
     }
   };
 
+  const handleCloseSectionTabs = async (sectionId: string) => {
+    if (!state) {
+      return;
+    }
+
+    const urls = state.links
+      .filter((link) => link.sectionId === sectionId)
+      .map((link) => link.url);
+    if (urls.length === 0) {
+      return;
+    }
+
+    try {
+      const result = await closeTabsMatchingUrls(urls);
+      if (result.requested === 0) {
+        return;
+      }
+      if (result.remaining > 0) {
+        showToast("Не удалось закрыть все вкладки", "error");
+        return;
+      }
+      const closed = result.requested - result.remaining;
+      showToast(closed === 1 ? "Вкладка закрыта" : `Закрыто вкладок: ${closed}`);
+    } catch {
+      showToast("Не удалось закрыть вкладки раздела", "error");
+    }
+  };
+
+  const handleDeleteSection = async (sectionId: string) => {
+    try {
+      await deleteSection(sectionId);
+      showToast("Раздел удалён");
+    } catch {
+      showToast("Не удалось удалить раздел", "error");
+    }
+  };
+
+  const handleReorderSections = async (
+    draggedId: string,
+    targetId: string,
+    place: DropPlace,
+  ) => {
+    try {
+      await reorderSections(draggedId, targetId, place);
+    } catch {
+      showToast("Не удалось изменить порядок разделов", "error");
+    }
+  };
+
   const handleOpenAll = async (sectionId: string) => {
     if (!state) {
       return;
@@ -331,6 +385,23 @@ export default function App() {
             onOpenCopy={handleOpenCopy}
             onCloseTab={handleCloseTab}
             onRemoveLink={handleRemoveLink}
+            onRenameSection={async (sectionId, name) => {
+              try {
+                await renameSection(sectionId, name);
+              } catch {
+                showToast("Не удалось переименовать раздел", "error");
+              }
+            }}
+            onSetSectionIcon={async (sectionId, icon) => {
+              try {
+                await setSectionIcon(sectionId, icon);
+              } catch {
+                showToast("Не удалось изменить иконку", "error");
+              }
+            }}
+            onCloseSectionTabs={handleCloseSectionTabs}
+            onDeleteSection={handleDeleteSection}
+            onReorderSections={handleReorderSections}
           />
         )}
       </main>

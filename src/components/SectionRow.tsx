@@ -1,7 +1,10 @@
+import { useEffect, useRef, useState } from "react";
 import type { RuntimeTabInfo, Section, StoredLink } from "../types/tabdock";
+import { SECTION_DRAG_TYPE, isSectionDrag } from "../utils/dnd";
 import type { DropPlace } from "../utils/order";
 import { isTemporarySection } from "../utils/section";
 import { LinkRow } from "./LinkRow";
+import { SectionMenu } from "./SectionMenu";
 
 export type DropHint =
   | { type: "section"; sectionId: string }
@@ -16,6 +19,8 @@ type SectionRowProps = {
   dragSourceId: string | null;
   dragSourceSectionId: string | null;
   dropHint: DropHint | null;
+  sectionDragging: boolean;
+  reorderPlace: DropPlace | null;
   onToggle: (sectionId: string) => void;
   onAddCurrent: (sectionId: string, closeAfter?: boolean) => void;
   onOpenAll: (sectionId: string) => void;
@@ -25,12 +30,20 @@ type SectionRowProps = {
   onOpenCopy: (link: StoredLink) => Promise<void>;
   onCloseTab: (link: StoredLink) => Promise<void>;
   onRemoveLink: (linkId: string) => Promise<void>;
-  onDragStart: (linkId: string) => void;
+  onRenameSection: (sectionId: string, name: string) => Promise<void>;
+  onSetSectionIcon: (sectionId: string, icon: string) => Promise<void>;
+  onCloseSectionTabs: (sectionId: string) => Promise<void>;
+  onDeleteSection: (sectionId: string) => Promise<void>;
+  onLinkDragStart: (linkId: string) => void;
   onLinkDragOver: (linkId: string, place: DropPlace) => void;
-  onSectionDragOver: (sectionId: string) => void;
+  onLinkOverSection: (sectionId: string) => void;
   onLinkDrop: (targetId: string) => void;
-  onSectionDrop: (sectionId: string) => void;
-  onDragEnd: () => void;
+  onLinkDropOnSection: (sectionId: string) => void;
+  onLinkDragEnd: () => void;
+  onSectionDragStart: (sectionId: string) => void;
+  onSectionReorderOver: (sectionId: string, place: DropPlace) => void;
+  onSectionReorderDrop: (sectionId: string) => void;
+  onSectionDragEnd: () => void;
 };
 
 export function SectionRow({
@@ -42,6 +55,8 @@ export function SectionRow({
   dragSourceId,
   dragSourceSectionId,
   dropHint,
+  sectionDragging,
+  reorderPlace,
   onToggle,
   onAddCurrent,
   onOpenAll,
@@ -51,71 +66,183 @@ export function SectionRow({
   onOpenCopy,
   onCloseTab,
   onRemoveLink,
-  onDragStart,
+  onRenameSection,
+  onSetSectionIcon,
+  onCloseSectionTabs,
+  onDeleteSection,
+  onLinkDragStart,
   onLinkDragOver,
-  onSectionDragOver,
+  onLinkOverSection,
   onLinkDrop,
-  onSectionDrop,
-  onDragEnd,
+  onLinkDropOnSection,
+  onLinkDragEnd,
+  onSectionDragStart,
+  onSectionReorderOver,
+  onSectionReorderDrop,
+  onSectionDragEnd,
 }: SectionRowProps) {
   const isTemporary = isTemporarySection(section);
+  const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const skipCommit = useRef(false);
   const openCount = links.filter((link) => runtimeByLinkId[link.id]?.isOpen).length;
   const total = links.length;
   const orderedLinks = [...links].sort((a, b) => a.order - b.order);
-  const isForeignTarget =
+  const isForeignLinkTarget =
     Boolean(dragSourceId) &&
+    !sectionDragging &&
     dragSourceSectionId !== section.id &&
     ((dropHint?.type === "section" && dropHint.sectionId === section.id) ||
       (dropHint?.type === "link" && orderedLinks.some((link) => link.id === dropHint.linkId)));
+  const reorderClass =
+    reorderPlace === "before" ? "drop-before" : reorderPlace === "after" ? "drop-after" : "";
+
+  useEffect(() => {
+    if (editing) {
+      skipCommit.current = false;
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commitRename = () => {
+    if (skipCommit.current) {
+      skipCommit.current = false;
+      return;
+    }
+    const next = (inputRef.current?.value ?? "").trim();
+    setEditing(false);
+    if (!next || next === section.name) {
+      return;
+    }
+    void onRenameSection(section.id, next);
+  };
 
   return (
     <section
-      className={`section-block ${isTemporary ? "is-temporary" : ""} ${isForeignTarget ? "is-drop-target" : ""}`}
+      className={`section-block ${isTemporary ? "is-temporary" : ""} ${isForeignLinkTarget ? "is-drop-target" : ""} ${sectionDragging ? "is-dragging" : ""}`}
       onDragOver={(event) => {
+        if (isSectionDrag(event)) {
+          if (isTemporary) {
+            return;
+          }
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          const rect = (rowRef.current ?? event.currentTarget).getBoundingClientRect();
+          const place: DropPlace = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+          onSectionReorderOver(section.id, place);
+          return;
+        }
         if (!dragSourceId) {
           return;
         }
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
-        onSectionDragOver(section.id);
+        onLinkOverSection(section.id);
       }}
       onDrop={(event) => {
+        if (isSectionDrag(event)) {
+          if (isTemporary) {
+            return;
+          }
+          event.preventDefault();
+          onSectionReorderDrop(section.id);
+          return;
+        }
         if (!dragSourceId) {
           return;
         }
         event.preventDefault();
-        onSectionDrop(section.id);
+        onLinkDropOnSection(section.id);
       }}
     >
-      <div className="section-row">
-        <button
-          type="button"
-          className="section-main"
-          onClick={() => onToggle(section.id)}
-          aria-expanded={!section.collapsed}
-          aria-label={
-            section.collapsed
-              ? `Развернуть раздел ${section.name}`
-              : `Свернуть раздел ${section.name}`
-          }
-          title={section.collapsed ? "Развернуть" : "Свернуть"}
-        >
-          <span className={`chevron ${section.collapsed ? "is-collapsed" : ""}`} aria-hidden="true">
-            <ChevronIcon />
-          </span>
-          <span className="section-icon" aria-hidden="true">
-            {section.icon}
-          </span>
-          <span className="section-name">{section.name}</span>
-          <span className="section-count">
-            {openCount} / {total}
-          </span>
-        </button>
+      <div
+        ref={rowRef}
+        className={`section-row ${reorderClass} ${editing ? "is-editing" : ""}`}
+      >
+        {!isTemporary && (
+          <button
+            type="button"
+            className="icon-button link-handle section-handle"
+            title="Перетащить раздел"
+            aria-label={`Перетащить раздел ${section.name}`}
+            draggable={!editing}
+            disabled={editing}
+            onClick={(event) => event.stopPropagation()}
+            onDragStart={(event) => {
+              event.stopPropagation();
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData(SECTION_DRAG_TYPE, section.id);
+              if (rowRef.current) {
+                event.dataTransfer.setDragImage(rowRef.current, 16, 20);
+              }
+              setMenuOpen(false);
+              onSectionDragStart(section.id);
+            }}
+            onDragEnd={onSectionDragEnd}
+          >
+            <DragHandleIcon />
+          </button>
+        )}
+        {editing ? (
+          <form
+            className="section-rename-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              inputRef.current?.blur();
+            }}
+          >
+            <input
+              ref={inputRef}
+              className="section-rename-input"
+              defaultValue={section.name}
+              aria-label="Название раздела"
+              onBlur={commitRename}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  skipCommit.current = true;
+                  setEditing(false);
+                }
+              }}
+            />
+          </form>
+        ) : (
+          <button
+            type="button"
+            className="section-main"
+            onClick={() => onToggle(section.id)}
+            aria-expanded={!section.collapsed}
+            aria-label={
+              section.collapsed
+                ? `Развернуть раздел ${section.name}`
+                : `Свернуть раздел ${section.name}`
+            }
+            title={section.collapsed ? "Развернуть" : "Свернуть"}
+          >
+            <span className={`chevron ${section.collapsed ? "is-collapsed" : ""}`} aria-hidden="true">
+              <ChevronIcon />
+            </span>
+            <span className="section-icon" aria-hidden="true">
+              {section.icon}
+            </span>
+            <span className="section-name">{section.name}</span>
+            <span className="section-count">
+              {openCount} / {total}
+            </span>
+          </button>
+        )}
         <div className="section-actions">
           <button
             type="button"
             className="icon-button"
-            onClick={(event) => onAddCurrent(section.id, event.shiftKey)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddCurrent(section.id, event.shiftKey);
+            }}
             title="Добавить текущую вкладку · Shift+клик — сохранить и закрыть"
             aria-label={`Добавить текущую вкладку в ${section.name}. Shift+клик — сохранить и закрыть`}
           >
@@ -125,13 +252,60 @@ export function SectionRow({
             <button
               type="button"
               className="icon-button"
-              onClick={() => onOpenAll(section.id)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenAll(section.id);
+              }}
               title="Открыть всё"
               aria-label={`Открыть все страницы раздела ${section.name}`}
               disabled={opening || total === 0}
             >
               {opening ? <span className="mini-spinner" aria-hidden="true" /> : <PlayIcon />}
             </button>
+          )}
+          {!isTemporary && (
+            <>
+              <button
+                ref={menuButtonRef}
+                type="button"
+                className="icon-button link-menu-button"
+                title="Действия с разделом"
+                aria-label={`Действия с разделом ${section.name}`}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setMenuOpen((open) => !open);
+                }}
+              >
+                <MoreIcon />
+              </button>
+              <SectionMenu
+                open={menuOpen}
+                sectionName={section.name}
+                linkCount={total}
+                openCount={openCount}
+                currentIcon={section.icon}
+                anchorRef={menuButtonRef}
+                onClose={() => setMenuOpen(false)}
+                onRename={() => {
+                  setMenuOpen(false);
+                  setEditing(true);
+                }}
+                onSetIcon={(icon) => {
+                  setMenuOpen(false);
+                  void onSetSectionIcon(section.id, icon);
+                }}
+                onCloseTabs={() => {
+                  setMenuOpen(false);
+                  void onCloseSectionTabs(section.id);
+                }}
+                onDelete={() => {
+                  setMenuOpen(false);
+                  void onDeleteSection(section.id);
+                }}
+              />
+            </>
           )}
         </div>
       </div>
@@ -168,7 +342,11 @@ export function SectionRow({
                 sections={sections}
                 dragging={dragSourceId === link.id}
                 dropPlace={
-                  dragSourceId && dropHint?.type === "link" && dropHint.linkId === link.id && dragSourceId !== link.id
+                  dragSourceId &&
+                  !sectionDragging &&
+                  dropHint?.type === "link" &&
+                  dropHint.linkId === link.id &&
+                  dragSourceId !== link.id
                     ? dropHint.place
                     : null
                 }
@@ -178,16 +356,29 @@ export function SectionRow({
                 onOpenCopy={onOpenCopy}
                 onCloseTab={onCloseTab}
                 onRemove={onRemoveLink}
-                onDragStart={onDragStart}
+                onDragStart={onLinkDragStart}
                 onDragOver={onLinkDragOver}
                 onDrop={onLinkDrop}
-                onDragEnd={onDragEnd}
+                onDragEnd={onLinkDragEnd}
               />
             ))
           )}
         </div>
       )}
     </section>
+  );
+}
+
+function DragHandleIcon() {
+  return (
+    <svg width="10" height="14" viewBox="0 0 10 14" aria-hidden="true" focusable="false">
+      <circle cx="3" cy="3" r="1.1" fill="currentColor" />
+      <circle cx="7" cy="3" r="1.1" fill="currentColor" />
+      <circle cx="3" cy="7" r="1.1" fill="currentColor" />
+      <circle cx="7" cy="7" r="1.1" fill="currentColor" />
+      <circle cx="3" cy="11" r="1.1" fill="currentColor" />
+      <circle cx="7" cy="11" r="1.1" fill="currentColor" />
+    </svg>
   );
 }
 
@@ -224,6 +415,16 @@ function PlayIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
       <path d="M4 2.6v8.8L11.4 7 4 2.6Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+      <circle cx="7" cy="3" r="1.2" fill="currentColor" />
+      <circle cx="7" cy="7" r="1.2" fill="currentColor" />
+      <circle cx="7" cy="11" r="1.2" fill="currentColor" />
     </svg>
   );
 }

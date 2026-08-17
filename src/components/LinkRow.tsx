@@ -3,6 +3,7 @@ import type { RuntimeTabInfo, Section, StoredLink } from "../types/tabdock";
 import { displayTitle } from "../utils/link";
 import type { DropPlace } from "../utils/order";
 import { displayHostname, hostnameLetter } from "../utils/url";
+import { LINK_DRAG_TYPE, isSectionDrag } from "../utils/dnd";
 import { LinkMenu } from "./LinkMenu";
 
 type LinkRowProps = {
@@ -83,6 +84,9 @@ export function LinkRow({
       ref={rowRef}
       className={`link-row ${isOpen ? "is-open" : "is-closed"} ${editing ? "is-editing" : ""} ${dragging ? "is-dragging" : ""} ${dropClass}`}
       onDragOver={(event) => {
+        if (isSectionDrag(event)) {
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         event.dataTransfer.dropEffect = "move";
@@ -91,6 +95,9 @@ export function LinkRow({
         onDragOver(link.id, place);
       }}
       onDrop={(event) => {
+        if (isSectionDrag(event)) {
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         onDrop(link.id);
@@ -107,6 +114,7 @@ export function LinkRow({
         onDragStart={(event) => {
           event.stopPropagation();
           event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData(LINK_DRAG_TYPE, link.id);
           event.dataTransfer.setData("text/plain", link.id);
           if (rowRef.current) {
             event.dataTransfer.setDragImage(rowRef.current, 20, 22);

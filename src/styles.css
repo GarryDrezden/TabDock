@@ -292,6 +292,56 @@ button:focus:not(:focus-visible) {
   background: var(--surface);
   border-radius: var(--radius);
   min-width: 0;
+  position: relative;
+}
+
+.section-row.drop-before::before,
+.section-row.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.section-row.drop-before::before {
+  top: 0;
+}
+
+.section-row.drop-after::after {
+  bottom: 0;
+}
+
+.section-block.is-dragging {
+  opacity: 0.45;
+}
+
+.section-handle {
+  flex-shrink: 0;
+}
+
+.section-row:hover .section-handle,
+.section-row:focus-within .section-handle {
+  opacity: 1;
+}
+
+.section-rename-form {
+  min-width: 0;
+  flex: 1;
+}
+
+.section-rename-input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-primary);
+  padding: 0 8px;
+  font-size: 13px;
 }
 
 .section-row:hover {
@@ -327,8 +377,10 @@ button:focus:not(:focus-visible) {
 
 .section-icon {
   flex-shrink: 0;
+  width: 1.25em;
   font-size: 14px;
   line-height: 1;
+  text-align: center;
 }
 
 .section-name {
@@ -354,6 +406,11 @@ button:focus:not(:focus-visible) {
   align-items: center;
   flex-shrink: 0;
   opacity: 0.72;
+}
+
+.section-actions .icon-button {
+  width: 28px;
+  height: 28px;
 }
 
 .section-row:hover .section-actions,
@@ -523,6 +580,66 @@ button:focus:not(:focus-visible) {
 .link-menu-confirm-actions button {
   width: auto;
   padding: 5px 8px;
+}
+
+.link-menu-confirm-copy {
+  margin-top: 6px !important;
+  color: var(--text-secondary) !important;
+  white-space: normal;
+}
+
+.section-menu {
+  max-width: min(252px, calc(100vw - 16px));
+}
+
+.icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 2px 4px 6px;
+}
+
+.icon-picker-grid button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.icon-picker-grid button.is-selected {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.icon-picker-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 6px;
+}
+
+.icon-picker-custom label {
+  color: var(--text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.icon-picker-input {
+  min-width: 0;
+  flex: 1;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-primary);
+  padding: 0 8px;
+  font-size: 13px;
 }
 
 .link-rename-form {

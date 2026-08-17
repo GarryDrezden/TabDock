@@ -23,12 +23,27 @@ export function findTemporarySection(sections: Section[]): Section | undefined {
   return sections.find(isTemporarySection);
 }
 
-export function sortSectionsForDisplay(sections: Section[]): Section[] {
-  const user = sections
+export function userSections(sections: Section[]): Section[] {
+  return sections
     .filter((section) => !isTemporarySection(section))
     .sort((a, b) => a.order - b.order);
-  const temporary = sections.filter(isTemporarySection);
-  return [...user, ...temporary];
+}
+
+export function firstGrapheme(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+    const first = segmenter.segment(trimmed)[Symbol.iterator]().next().value;
+    return first?.segment ?? "";
+  }
+  return [...trimmed][0] ?? "";
+}
+
+export function sortSectionsForDisplay(sections: Section[]): Section[] {
+  return [...userSections(sections), ...sections.filter(isTemporarySection)];
 }
 
 export function ensureTemporarySection(state: TabDockState): {

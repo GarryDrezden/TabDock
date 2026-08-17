@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { loadState, normalizeState, saveState } from "../services/storage";
 import type { PanelSide, PlaceLinkResult, Section, StoredLink, TabDockState } from "../types/tabdock";
 import { createId } from "../utils/ids";
-import { linksInSection, moveItemById, ordersEqual, type LinkPlacement } from "../utils/order";
-import { ensureTemporarySection, isTemporarySection } from "../utils/section";
+import { linksInSection, moveItemById, ordersEqual, type DropPlace, type LinkPlacement } from "../utils/order";
+import { ensureTemporarySection, firstGrapheme, isTemporarySection, userSections } from "../utils/section";
 import { urlsMatch } from "../utils/url";
 
 const DEFAULT_SECTION_ICON = "📁";
@@ -306,6 +306,117 @@ export function useTabDockState() {
     [persist, state],
   );
 
+  const renameSection = useCallback(
+    async (sectionId: string, name: string) => {
+      if (!state) {
+        throw new Error("TabDock ещё не загружен");
+      }
+
+      const section = state.sections.find((item) => item.id === sectionId);
+      if (!section || isTemporarySection(section)) {
+        return;
+      }
+
+      const trimmed = name.trim();
+      if (!trimmed || trimmed === section.name) {
+        return;
+      }
+
+      await persist({
+        ...state,
+        sections: state.sections.map((item) =>
+          item.id === sectionId ? { ...item, name: trimmed } : item,
+        ),
+      });
+    },
+    [persist, state],
+  );
+
+  const setSectionIcon = useCallback(
+    async (sectionId: string, icon: string) => {
+      if (!state) {
+        throw new Error("TabDock ещё не загружен");
+      }
+
+      const section = state.sections.find((item) => item.id === sectionId);
+      const nextIcon = firstGrapheme(icon);
+      if (!section || isTemporarySection(section) || !nextIcon || nextIcon === section.icon) {
+        return;
+      }
+
+      await persist({
+        ...state,
+        sections: state.sections.map((item) =>
+          item.id === sectionId ? { ...item, icon: nextIcon } : item,
+        ),
+      });
+    },
+    [persist, state],
+  );
+
+  const deleteSection = useCallback(
+    async (sectionId: string) => {
+      if (!state) {
+        throw new Error("TabDock ещё не загружен");
+      }
+
+      const section = state.sections.find((item) => item.id === sectionId);
+      if (!section || isTemporarySection(section)) {
+        return;
+      }
+
+      const remaining = state.sections.filter((item) => item.id !== sectionId);
+      const reindexed = userSections(remaining).map((item, index) => ({
+        ...item,
+        order: index,
+      }));
+      const nextOrder = new Map(reindexed.map((item) => [item.id, item.order]));
+
+      await persist({
+        ...state,
+        sections: remaining.map((item) => {
+          const order = nextOrder.get(item.id);
+          return order === undefined ? item : { ...item, order };
+        }),
+        links: state.links.filter((link) => link.sectionId !== sectionId),
+      });
+    },
+    [persist, state],
+  );
+
+  const reorderSections = useCallback(
+    async (draggedId: string, targetId: string, place: DropPlace) => {
+      if (!state) {
+        throw new Error("TabDock ещё не загружен");
+      }
+
+      const dragged = state.sections.find((item) => item.id === draggedId);
+      const target = state.sections.find((item) => item.id === targetId);
+      if (!dragged || !target || isTemporarySection(dragged) || isTemporarySection(target)) {
+        return;
+      }
+
+      const current = userSections(state.sections);
+      const reordered = moveItemById(current, draggedId, targetId, place).map((item, index) => ({
+        ...item,
+        order: index,
+      }));
+      if (ordersEqual(current, reordered)) {
+        return;
+      }
+
+      const nextOrder = new Map(reordered.map((item) => [item.id, item.order]));
+      await persist({
+        ...state,
+        sections: state.sections.map((item) => {
+          const order = nextOrder.get(item.id);
+          return order === undefined ? item : { ...item, order };
+        }),
+      });
+    },
+    [persist, state],
+  );
+
   const setPanelSide = useCallback(
     async (panelSide: PanelSide) => {
       if (!state) {
@@ -328,6 +439,10 @@ export function useTabDockState() {
     toggleCollapsed,
     addLink,
     renameLink,
+    renameSection,
+    setSectionIcon,
+    deleteSection,
+    reorderSections,
     placeLink,
     removeLink,
     markOpened,

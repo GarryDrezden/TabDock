@@ -54,6 +54,35 @@ export async function closeTab(tabId: number): Promise<void> {
   await chrome.tabs.remove(tabId);
 }
 
+export async function closeTabsMatchingUrls(urls: string[]): Promise<{
+  requested: number;
+  remaining: number;
+}> {
+  const currentTabs = await chrome.tabs.query({});
+  const ids = currentTabs
+    .filter((tab) => {
+      const tabUrl = tab.url;
+      return tab.id !== undefined && typeof tabUrl === "string" && urls.some((url) => urlsMatch(url, tabUrl));
+    })
+    .map((tab) => tab.id as number);
+
+  for (const id of ids) {
+    try {
+      await chrome.tabs.remove(id);
+    } catch {
+      // Keep going so a single failure does not abort the rest.
+    }
+  }
+
+  const after = await chrome.tabs.query({});
+  const remaining = after.filter((tab) => {
+    const tabUrl = tab.url;
+    return typeof tabUrl === "string" && urls.some((url) => urlsMatch(url, tabUrl));
+  }).length;
+
+  return { requested: ids.length, remaining };
+}
+
 export async function openMissingSectionLinks(
   links: StoredLink[],
   tabs: chrome.tabs.Tab[],
