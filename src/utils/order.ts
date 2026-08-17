@@ -45,6 +45,24 @@ export function linksInSection(
     .sort((a, b) => a.order - b.order);
 }
 
+export function insertLinkAt(
+  siblings: StoredLink[],
+  link: StoredLink,
+  placement: LinkPlacement,
+): StoredLink[] {
+  if (placement.kind === "end") {
+    return [...siblings, link];
+  }
+
+  const targetIndex = siblings.findIndex((item) => item.id === placement.targetLinkId);
+  if (targetIndex < 0) {
+    return [...siblings, link];
+  }
+
+  const insertAt = placement.place === "after" ? targetIndex + 1 : targetIndex;
+  return [...siblings.slice(0, insertAt), link, ...siblings.slice(insertAt)];
+}
+
 export function ordersEqual<T extends { id: string; order: number }>(left: T[], right: T[]): boolean {
   if (left.length !== right.length) {
     return false;

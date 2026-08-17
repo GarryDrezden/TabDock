@@ -37,6 +37,17 @@ export type RuntimeTabInfo = {
   tabIndex?: number;
 };
 
+export type UnsavedBrowserTab = {
+  tabId: number;
+  windowId: number;
+  index: number;
+  url: string;
+  title: string;
+  favIconUrl?: string;
+};
+
+export type AddLinkResult = "created" | "duplicate" | "already-saved";
+
 export type ToastTone = "info" | "error";
 
 export type ToastMessage = {

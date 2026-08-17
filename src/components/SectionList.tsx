@@ -1,13 +1,15 @@
 import { useRef, useState } from "react";
-import type { RuntimeTabInfo, Section, StoredLink } from "../types/tabdock";
+import type { RuntimeTabInfo, Section, StoredLink, UnsavedBrowserTab } from "../types/tabdock";
 import type { DropPlace, LinkPlacement } from "../utils/order";
 import { sortSectionsForDisplay } from "../utils/section";
 import { SectionRow, type DropHint } from "./SectionRow";
+import { UnsavedTabsSection } from "./UnsavedTabsSection";
 
 type SectionListProps = {
   sections: Section[];
   links: StoredLink[];
   runtimeByLinkId: Record<string, RuntimeTabInfo>;
+  unsavedTabs: UnsavedBrowserTab[];
   openingSectionId: string | null;
   onToggle: (sectionId: string) => void;
   onAddCurrent: (sectionId: string, closeAfter?: boolean) => void;
@@ -23,12 +25,18 @@ type SectionListProps = {
   onCloseSectionTabs: (sectionId: string) => Promise<void>;
   onDeleteSection: (sectionId: string) => Promise<void>;
   onReorderSections: (draggedId: string, targetId: string, place: DropPlace) => Promise<void>;
+  onOpenUnsavedTab: (tab: UnsavedBrowserTab) => Promise<void>;
+  onAddUnsavedToSection: (tabId: number, sectionId: string) => Promise<void>;
+  onPostponeUnsaved: (tabId: number) => Promise<void>;
+  onCloseUnsavedTab: (tabId: number) => Promise<void>;
+  onDropUnsavedTab: (tabId: number, sectionId: string, placement: LinkPlacement) => Promise<void>;
 };
 
 export function SectionList({
   sections,
   links,
   runtimeByLinkId,
+  unsavedTabs,
   openingSectionId,
   onToggle,
   onAddCurrent,
@@ -44,6 +52,11 @@ export function SectionList({
   onCloseSectionTabs,
   onDeleteSection,
   onReorderSections,
+  onOpenUnsavedTab,
+  onAddUnsavedToSection,
+  onPostponeUnsaved,
+  onCloseUnsavedTab,
+  onDropUnsavedTab,
 }: SectionListProps) {
   const [dragSourceId, setDragSourceId] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<DropHint | null>(null);
@@ -51,10 +64,12 @@ export function SectionList({
   const [reorderHint, setReorderHint] = useState<{ sectionId: string; place: DropPlace } | null>(
     null,
   );
+  const [tabDragId, setTabDragId] = useState<number | null>(null);
   const dragSourceIdRef = useRef<string | null>(null);
   const dropHintRef = useRef<DropHint | null>(null);
   const sectionDragIdRef = useRef<string | null>(null);
   const reorderHintRef = useRef<{ sectionId: string; place: DropPlace } | null>(null);
+  const tabDragIdRef = useRef<number | null>(null);
   const orderedSections = sortSectionsForDisplay(sections);
   const dragSourceSectionId = links.find((link) => link.id === dragSourceId)?.sectionId ?? null;
 
@@ -82,6 +97,13 @@ export function SectionList({
     setReorderHint(null);
   };
 
+  const clearTabDrag = () => {
+    tabDragIdRef.current = null;
+    dropHintRef.current = null;
+    setTabDragId(null);
+    setDropHint(null);
+  };
+
   const dropLinkAt = (sectionId: string, placement: LinkPlacement) => {
     const sourceId = dragSourceIdRef.current;
     if (!sourceId) {
@@ -89,6 +111,23 @@ export function SectionList({
     }
     clearLinkDrag();
     void onPlaceLink(sourceId, sectionId, placement);
+  };
+
+  const dropTabAt = (sectionId: string, placement: LinkPlacement) => {
+    const sourceId = tabDragIdRef.current;
+    if (sourceId === null) {
+      return;
+    }
+    clearTabDrag();
+    void onDropUnsavedTab(sourceId, sectionId, placement);
+  };
+
+  const dropAt = (sectionId: string, placement: LinkPlacement) => {
+    if (tabDragIdRef.current !== null) {
+      dropTabAt(sectionId, placement);
+      return;
+    }
+    dropLinkAt(sectionId, placement);
   };
 
   return (
@@ -105,6 +144,7 @@ export function SectionList({
           dragSourceSectionId={dragSourceSectionId}
           dropHint={dropHint}
           sectionDragging={sectionDragId === section.id}
+          tabDragging={tabDragId !== null}
           reorderPlace={
             sectionDragId &&
             reorderHint?.sectionId === section.id &&
@@ -127,6 +167,7 @@ export function SectionList({
           onDeleteSection={onDeleteSection}
           onLinkDragStart={(linkId) => {
             clearSectionDrag();
+            clearTabDrag();
             dragSourceIdRef.current = linkId;
             setDragSourceId(linkId);
           }}
@@ -141,17 +182,19 @@ export function SectionList({
             const hint = dropHintRef.current;
             const place = hint?.type === "link" ? hint.place : "before";
             if (target) {
-              dropLinkAt(target.sectionId, { kind: "at", targetLinkId: targetId, place });
+              dropAt(target.sectionId, { kind: "at", targetLinkId: targetId, place });
             } else {
               clearLinkDrag();
+              clearTabDrag();
             }
           }}
           onLinkDropOnSection={(sectionId) => {
-            dropLinkAt(sectionId, { kind: "end" });
+            dropAt(sectionId, { kind: "end" });
           }}
           onLinkDragEnd={clearLinkDrag}
           onSectionDragStart={(sectionId) => {
             clearLinkDrag();
+            clearTabDrag();
             sectionDragIdRef.current = sectionId;
             setSectionDragId(sectionId);
           }}
@@ -170,6 +213,22 @@ export function SectionList({
           onSectionDragEnd={clearSectionDrag}
         />
       ))}
+      <UnsavedTabsSection
+        tabs={unsavedTabs}
+        sections={sections}
+        draggingTabId={tabDragId}
+        onOpen={onOpenUnsavedTab}
+        onAddToSection={onAddUnsavedToSection}
+        onPostpone={onPostponeUnsaved}
+        onCloseTab={onCloseUnsavedTab}
+        onDragStart={(tab) => {
+          clearLinkDrag();
+          clearSectionDrag();
+          tabDragIdRef.current = tab.tabId;
+          setTabDragId(tab.tabId);
+        }}
+        onDragEnd={clearTabDrag}
+      />
     </div>
   );
 }

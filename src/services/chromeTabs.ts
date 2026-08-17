@@ -13,6 +13,14 @@ export async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
   return tab;
 }
 
+export async function getTab(tabId: number): Promise<chrome.tabs.Tab | undefined> {
+  try {
+    return await chrome.tabs.get(tabId);
+  } catch {
+    return undefined;
+  }
+}
+
 export function findTabByUrl(
   tabs: chrome.tabs.Tab[],
   url: string,

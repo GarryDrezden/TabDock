@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { RuntimeTabInfo, Section, StoredLink } from "../types/tabdock";
-import { SECTION_DRAG_TYPE, isSectionDrag } from "../utils/dnd";
+import { SECTION_DRAG_TYPE, isSectionDrag, isTabDrag } from "../utils/dnd";
 import type { DropPlace } from "../utils/order";
 import { isTemporarySection } from "../utils/section";
 import { LinkRow } from "./LinkRow";
@@ -20,6 +20,7 @@ type SectionRowProps = {
   dragSourceSectionId: string | null;
   dropHint: DropHint | null;
   sectionDragging: boolean;
+  tabDragging: boolean;
   reorderPlace: DropPlace | null;
   onToggle: (sectionId: string) => void;
   onAddCurrent: (sectionId: string, closeAfter?: boolean) => void;
@@ -56,6 +57,7 @@ export function SectionRow({
   dragSourceSectionId,
   dropHint,
   sectionDragging,
+  tabDragging,
   reorderPlace,
   onToggle,
   onAddCurrent,
@@ -91,10 +93,9 @@ export function SectionRow({
   const openCount = links.filter((link) => runtimeByLinkId[link.id]?.isOpen).length;
   const total = links.length;
   const orderedLinks = [...links].sort((a, b) => a.order - b.order);
-  const isForeignLinkTarget =
-    Boolean(dragSourceId) &&
+  const isForeignDropTarget =
     !sectionDragging &&
-    dragSourceSectionId !== section.id &&
+    ((Boolean(dragSourceId) && dragSourceSectionId !== section.id) || tabDragging) &&
     ((dropHint?.type === "section" && dropHint.sectionId === section.id) ||
       (dropHint?.type === "link" && orderedLinks.some((link) => link.id === dropHint.linkId)));
   const reorderClass =
@@ -123,7 +124,7 @@ export function SectionRow({
 
   return (
     <section
-      className={`section-block ${isTemporary ? "is-temporary" : ""} ${isForeignLinkTarget ? "is-drop-target" : ""} ${sectionDragging ? "is-dragging" : ""}`}
+      className={`section-block ${isTemporary ? "is-temporary" : ""} ${isForeignDropTarget ? "is-drop-target" : ""} ${sectionDragging ? "is-dragging" : ""}`}
       onDragOver={(event) => {
         if (isSectionDrag(event)) {
           if (isTemporary) {
@@ -134,6 +135,12 @@ export function SectionRow({
           const rect = (rowRef.current ?? event.currentTarget).getBoundingClientRect();
           const place: DropPlace = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
           onSectionReorderOver(section.id, place);
+          return;
+        }
+        if (isTabDrag(event) || tabDragging) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          onLinkOverSection(section.id);
           return;
         }
         if (!dragSourceId) {
@@ -150,6 +157,11 @@ export function SectionRow({
           }
           event.preventDefault();
           onSectionReorderDrop(section.id);
+          return;
+        }
+        if (isTabDrag(event) || tabDragging) {
+          event.preventDefault();
+          onLinkDropOnSection(section.id);
           return;
         }
         if (!dragSourceId) {
@@ -342,7 +354,7 @@ export function SectionRow({
                 sections={sections}
                 dragging={dragSourceId === link.id}
                 dropPlace={
-                  dragSourceId &&
+                  (Boolean(dragSourceId) || tabDragging) &&
                   !sectionDragging &&
                   dropHint?.type === "link" &&
                   dropHint.linkId === link.id &&

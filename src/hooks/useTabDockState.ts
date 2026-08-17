@@ -1,8 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { loadState, normalizeState, saveState } from "../services/storage";
-import type { PanelSide, PlaceLinkResult, Section, StoredLink, TabDockState } from "../types/tabdock";
+import type {
+  AddLinkResult,
+  PanelSide,
+  PlaceLinkResult,
+  Section,
+  StoredLink,
+  TabDockState,
+} from "../types/tabdock";
 import { createId } from "../utils/ids";
-import { linksInSection, moveItemById, ordersEqual, type DropPlace, type LinkPlacement } from "../utils/order";
+import {
+  insertLinkAt,
+  linksInSection,
+  moveItemById,
+  ordersEqual,
+  type DropPlace,
+  type LinkPlacement,
+} from "../utils/order";
 import { ensureTemporarySection, firstGrapheme, isTemporarySection, userSections } from "../utils/section";
 import { urlsMatch } from "../utils/url";
 
@@ -113,38 +127,50 @@ export function useTabDockState() {
   );
 
   const addLink = useCallback(
-    async (sectionId: string, input: { url: string; title: string; favIconUrl?: string }) => {
+    async (
+      sectionId: string,
+      input: { url: string; title: string; favIconUrl?: string },
+      options?: { placement?: LinkPlacement; unique?: "section" | "global" },
+    ): Promise<AddLinkResult> => {
       if (!state) {
         throw new Error("TabDock ещё не загружен");
       }
 
-      const exists = state.links.some(
-        (link) => link.sectionId === sectionId && urlsMatch(link.url, input.url),
-      );
-      if (exists) {
-        return "duplicate" as const;
+      const unique = options?.unique ?? "section";
+      const placement = options?.placement ?? { kind: "end" };
+
+      if (unique === "global") {
+        if (state.links.some((link) => urlsMatch(link.url, input.url))) {
+          return "already-saved";
+        }
+      } else if (
+        state.links.some((link) => link.sectionId === sectionId && urlsMatch(link.url, input.url))
+      ) {
+        return "duplicate";
       }
 
-      const siblings = state.links.filter((link) => link.sectionId === sectionId);
-      const maxOrder = siblings.reduce((max, link) => Math.max(max, link.order), -1);
-
+      const siblings = linksInSection(state.links, sectionId);
       const link: StoredLink = {
         id: createId(),
         sectionId,
         url: input.url,
         title: input.title,
         favIconUrl: input.favIconUrl,
-        order: maxOrder + 1,
+        order: 0,
         createdAt: Date.now(),
         lastOpenedAt: Date.now(),
       };
+      const indexed = insertLinkAt(siblings, link, placement).map((item, index) => ({
+        ...item,
+        order: index,
+      }));
 
       await persist({
         ...state,
-        links: [...state.links, link],
+        links: [...state.links.filter((item) => item.sectionId !== sectionId), ...indexed],
       });
 
-      return "created" as const;
+      return "created";
     },
     [persist, state],
   );

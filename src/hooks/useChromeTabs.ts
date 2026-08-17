@@ -3,11 +3,23 @@ import { queryAllTabs } from "../services/chromeTabs";
 
 export function useChromeTabs() {
   const [tabs, setTabs] = useState<chrome.tabs.Tab[]>([]);
+  const [focusedWindowId, setFocusedWindowId] = useState<number | undefined>();
   const [tabsReady, setTabsReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     let debounceId: number | undefined;
+
+    const rememberFocusedWindow = async () => {
+      try {
+        const last = await chrome.windows.getLastFocused();
+        if (!cancelled && last.id !== undefined && last.id !== chrome.windows.WINDOW_ID_NONE) {
+          setFocusedWindowId(last.id);
+        }
+      } catch {
+        // Keep the last known focused window if Chrome has no focused window.
+      }
+    };
 
     const refresh = async () => {
       try {
@@ -15,6 +27,7 @@ export function useChromeTabs() {
         if (!cancelled) {
           setTabs(next);
         }
+        await rememberFocusedWindow();
       } catch {
         if (!cancelled) {
           setTabs([]);
@@ -54,7 +67,10 @@ export function useChromeTabs() {
         refreshSoon();
       }
     };
-    const onFocusChanged = () => {
+    const onFocusChanged = (windowId: number) => {
+      if (windowId !== chrome.windows.WINDOW_ID_NONE) {
+        setFocusedWindowId(windowId);
+      }
       refreshSoon();
     };
 
@@ -77,5 +93,5 @@ export function useChromeTabs() {
     };
   }, []);
 
-  return { tabs, tabsReady };
+  return { tabs, focusedWindowId, tabsReady };
 }

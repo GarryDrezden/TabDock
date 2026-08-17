@@ -12,6 +12,7 @@ import {
   findTabByUrl,
   focusExistingTab,
   getActiveTab,
+  getTab,
   openMissingSectionLinks,
   openUrlInNewTab,
   readSavableTab,
@@ -28,9 +29,10 @@ import {
 import { loadState } from "./services/storage";
 import { backupErrorMessage } from "./types/backup";
 import { useChromePanelSide } from "./hooks/useChromePanelSide";
-import type { PanelSide, StoredLink, TabDockState, ToastMessage } from "./types/tabdock";
+import type { PanelSide, StoredLink, TabDockState, ToastMessage, UnsavedBrowserTab } from "./types/tabdock";
 import type { DropPlace, LinkPlacement } from "./utils/order";
 import { findTemporarySection, isTemporarySection } from "./utils/section";
+import { listUnsavedTabs } from "./utils/unsaved";
 import { urlsMatch } from "./utils/url";
 
 export default function App() {
@@ -52,7 +54,7 @@ export default function App() {
     setPanelSide,
     replaceState,
   } = useTabDockState();
-  const { tabs, tabsReady } = useChromeTabs();
+  const { tabs, focusedWindowId, tabsReady } = useChromeTabs();
   const { chromeSide, refreshChromeSide } = useChromePanelSide();
   const [showNewSection, setShowNewSection] = useState(false);
   const [importPreview, setImportPreview] = useState<{
@@ -74,6 +76,13 @@ export default function App() {
       state.links.map((link) => [link.id, runtimeForLink(link, tabs)]),
     );
   }, [state, tabs]);
+
+  const unsavedTabs = useMemo(() => {
+    if (!state) {
+      return [];
+    }
+    return listUnsavedTabs(tabs, state.links, focusedWindowId);
+  }, [focusedWindowId, state, tabs]);
 
   const showToast = (text: string, tone: ToastMessage["tone"] = "info") => {
     if (toastTimer.current !== undefined) {
@@ -189,58 +198,170 @@ export default function App() {
     }
   };
 
-  const handleDeferCurrent = async () => {
+  const postponeFromTab = async (tab: chrome.tabs.Tab) => {
     if (!state) {
       return;
     }
 
+    const tabId = tab.id;
+    const payload = readSavableTab(tab);
+    if (!payload) {
+      showToast("Эту страницу нельзя сохранить в TabDock", "error");
+      return;
+    }
+
+    const temporary = findTemporarySection(state.sections);
+    if (!temporary) {
+      showToast("Не удалось сохранить вкладку", "error");
+      return;
+    }
+
+    const matches = state.links.filter((link) => urlsMatch(link.url, payload.url));
+    const inTemporary = matches.some((link) => link.sectionId === temporary.id);
+    const inUser = matches.filter((link) => {
+      const section = state.sections.find((item) => item.id === link.sectionId);
+      return section ? !isTemporarySection(section) : link.sectionId !== temporary.id;
+    });
+
+    let closedMessage = "Отложено";
+    let openMessage = "Отложено";
+
+    if (inTemporary) {
+      closedMessage = "Уже во «Временном» — вкладка закрыта";
+      openMessage = "Уже во «Временном»";
+    } else if (inUser.length === 1) {
+      const sectionName =
+        state.sections.find((section) => section.id === inUser[0]?.sectionId)?.name ?? "разделе";
+      closedMessage = `Уже сохранено в «${sectionName}» — вкладка закрыта`;
+      openMessage = `Уже сохранено в «${sectionName}»`;
+    } else if (inUser.length > 1) {
+      closedMessage = "Уже сохранено в TabDock — вкладка закрыта";
+      openMessage = "Уже сохранено в TabDock";
+    } else {
+      const result = await addLink(temporary.id, payload);
+      if (result === "duplicate" || result === "already-saved") {
+        closedMessage = "Уже во «Временном» — вкладка закрыта";
+        openMessage = "Уже во «Временном»";
+      }
+    }
+
+    await closeCapturedTab(tabId, closedMessage, openMessage);
+  };
+
+  const handleDeferCurrent = async () => {
     try {
       const tab = await getActiveTab();
-      const tabId = tab?.id;
-      const payload = readSavableTab(tab);
-      if (!payload) {
+      if (!tab) {
         showToast("Эту страницу нельзя сохранить в TabDock", "error");
         return;
       }
-
-      const temporary = findTemporarySection(state.sections);
-      if (!temporary) {
-        showToast("Не удалось сохранить вкладку", "error");
-        return;
-      }
-
-      const matches = state.links.filter((link) => urlsMatch(link.url, payload.url));
-      const inTemporary = matches.some((link) => link.sectionId === temporary.id);
-      const inUser = matches.filter((link) => {
-        const section = state.sections.find((item) => item.id === link.sectionId);
-        return section ? !isTemporarySection(section) : link.sectionId !== temporary.id;
-      });
-
-      let closedMessage = "Отложено";
-      let openMessage = "Отложено";
-
-      if (inTemporary) {
-        closedMessage = "Уже во «Временном» — вкладка закрыта";
-        openMessage = "Уже во «Временном»";
-      } else if (inUser.length === 1) {
-        const sectionName =
-          state.sections.find((section) => section.id === inUser[0]?.sectionId)?.name ?? "разделе";
-        closedMessage = `Уже сохранено в «${sectionName}» — вкладка закрыта`;
-        openMessage = `Уже сохранено в «${sectionName}»`;
-      } else if (inUser.length > 1) {
-        closedMessage = "Уже сохранено в TabDock — вкладка закрыта";
-        openMessage = "Уже сохранено в TabDock";
-      } else {
-        const result = await addLink(temporary.id, payload);
-        if (result === "duplicate") {
-          closedMessage = "Уже во «Временном» — вкладка закрыта";
-          openMessage = "Уже во «Временном»";
-        }
-      }
-
-      await closeCapturedTab(tabId, closedMessage, openMessage);
+      await postponeFromTab(tab);
     } catch {
       showToast("Не удалось сохранить вкладку", "error");
+    }
+  };
+
+  const handlePostponeUnsaved = async (tabId: number) => {
+    try {
+      const tab = await getTab(tabId);
+      if (!tab) {
+        showToast("Вкладка уже закрыта", "error");
+        return;
+      }
+      await postponeFromTab(tab);
+    } catch {
+      showToast("Не удалось сохранить вкладку", "error");
+    }
+  };
+
+  const saveUnsavedTab = async (
+    tabId: number,
+    sectionId: string,
+    placement?: LinkPlacement,
+  ) => {
+    if (!state) {
+      return;
+    }
+
+    const tab = await getTab(tabId);
+    if (!tab) {
+      showToast("Вкладка уже закрыта", "error");
+      return;
+    }
+
+    const payload = readSavableTab(tab);
+    if (!payload) {
+      showToast("Эту страницу нельзя сохранить в TabDock", "error");
+      return;
+    }
+
+    const section = state.sections.find((item) => item.id === sectionId);
+    if (!section || isTemporarySection(section)) {
+      return;
+    }
+
+    const result = await addLink(sectionId, payload, {
+      unique: "global",
+      placement,
+    });
+    if (result === "already-saved" || result === "duplicate") {
+      showToast("Страница уже сохранена в TabDock");
+      return;
+    }
+    showToast(`Добавлено в «${section.name}»`);
+  };
+
+  const handleAddUnsavedToSection = async (tabId: number, sectionId: string) => {
+    try {
+      await saveUnsavedTab(tabId, sectionId);
+    } catch {
+      showToast("Не удалось сохранить вкладку", "error");
+    }
+  };
+
+  const handleDropUnsavedTab = async (
+    tabId: number,
+    sectionId: string,
+    placement: LinkPlacement,
+  ) => {
+    if (!state) {
+      return;
+    }
+
+    const section = state.sections.find((item) => item.id === sectionId);
+    if (!section) {
+      return;
+    }
+
+    try {
+      if (isTemporarySection(section)) {
+        await handlePostponeUnsaved(tabId);
+        return;
+      }
+      await saveUnsavedTab(tabId, sectionId, placement);
+    } catch {
+      showToast("Не удалось сохранить вкладку", "error");
+    }
+  };
+
+  const handleOpenUnsavedTab = async (tab: UnsavedBrowserTab) => {
+    try {
+      const fresh = await getTab(tab.tabId);
+      if (!fresh) {
+        showToast("Вкладка уже закрыта", "error");
+        return;
+      }
+      await focusExistingTab(fresh);
+    } catch {
+      showToast("Не удалось перейти к вкладке", "error");
+    }
+  };
+
+  const handleCloseUnsavedTab = async (tabId: number) => {
+    try {
+      await closeTab(tabId);
+    } catch {
+      showToast("Не удалось закрыть вкладку", "error");
     }
   };
 
@@ -454,6 +575,7 @@ export default function App() {
             sections={state.sections}
             links={state.links}
             runtimeByLinkId={runtimeByLinkId}
+            unsavedTabs={unsavedTabs}
             openingSectionId={openingSectionId}
             onToggle={(sectionId) => {
               void toggleCollapsed(sectionId);
@@ -493,6 +615,11 @@ export default function App() {
             onCloseSectionTabs={handleCloseSectionTabs}
             onDeleteSection={handleDeleteSection}
             onReorderSections={handleReorderSections}
+            onOpenUnsavedTab={handleOpenUnsavedTab}
+            onAddUnsavedToSection={handleAddUnsavedToSection}
+            onPostponeUnsaved={handlePostponeUnsaved}
+            onCloseUnsavedTab={handleCloseUnsavedTab}
+            onDropUnsavedTab={handleDropUnsavedTab}
           />
         )}
       </main>
