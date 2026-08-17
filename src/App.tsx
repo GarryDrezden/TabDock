@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { AppHeader } from "./components/AppHeader";
+import { ImportPreview } from "./components/ImportPreview";
 import { NewSectionForm } from "./components/NewSectionForm";
 import { SectionList } from "./components/SectionList";
 import { Toast } from "./components/Toast";
@@ -17,8 +18,17 @@ import {
   runtimeForLink,
 } from "./services/chromeTabs";
 import { getChromePanelSide, PANEL_SIDE_HINT } from "./services/chromeSidePanel";
+import {
+  backupFilename,
+  createBackup,
+  downloadJsonFile,
+  readBackupFile,
+  serializeBackup,
+} from "./services/backup";
+import { loadState } from "./services/storage";
+import { backupErrorMessage } from "./types/backup";
 import { useChromePanelSide } from "./hooks/useChromePanelSide";
-import type { PanelSide, StoredLink, ToastMessage } from "./types/tabdock";
+import type { PanelSide, StoredLink, TabDockState, ToastMessage } from "./types/tabdock";
 import type { DropPlace, LinkPlacement } from "./utils/order";
 import { findTemporarySection, isTemporarySection } from "./utils/section";
 import { urlsMatch } from "./utils/url";
@@ -40,10 +50,16 @@ export default function App() {
     removeLink,
     markOpened,
     setPanelSide,
+    replaceState,
   } = useTabDockState();
   const { tabs, tabsReady } = useChromeTabs();
   const { chromeSide, refreshChromeSide } = useChromePanelSide();
   const [showNewSection, setShowNewSection] = useState(false);
+  const [importPreview, setImportPreview] = useState<{
+    fileName: string;
+    state: TabDockState;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [openingSectionId, setOpeningSectionId] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
@@ -88,6 +104,49 @@ export default function App() {
       showToast(PANEL_SIDE_HINT);
     } catch {
       showToast("Не удалось сохранить сторону панели", "error");
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const fresh = await loadState();
+      const backup = createBackup(fresh, chrome.runtime.getManifest().version);
+      const json = serializeBackup(backup);
+      downloadJsonFile(backupFilename(), json);
+      showToast("Резервная копия создана");
+    } catch {
+      showToast("Не удалось создать резервную копию", "error");
+    }
+  };
+
+  const handleImportFile = async (file: File | undefined) => {
+    if (!file) {
+      return;
+    }
+
+    try {
+      const result = await readBackupFile(file);
+      if (!result.ok) {
+        showToast(backupErrorMessage(result.error), "error");
+        return;
+      }
+      setImportPreview({ fileName: file.name, state: result.state });
+    } catch {
+      showToast(backupErrorMessage("read"), "error");
+    }
+  };
+
+  const handleRestoreBackup = async () => {
+    if (!importPreview) {
+      return;
+    }
+
+    try {
+      await replaceState(importPreview.state);
+      setImportPreview(null);
+      showToast("Резервная копия восстановлена");
+    } catch {
+      showToast("Не удалось сохранить данные TabDock", "error");
     }
   };
 
@@ -343,10 +402,42 @@ export default function App() {
         onDeferCurrent={() => {
           void handleDeferCurrent();
         }}
+        onExport={() => {
+          void handleExport();
+        }}
+        onImport={() => {
+          fileInputRef.current?.click();
+        }}
         onPanelSideChange={(side) => {
           void handlePanelSideChange(side);
         }}
       />
+      <input
+        ref={fileInputRef}
+        className="visually-hidden"
+        type="file"
+        accept="application/json,.json"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          void handleImportFile(file);
+        }}
+      />
+      {importPreview && state && (
+        <ImportPreview
+          fileName={importPreview.fileName}
+          backupSections={importPreview.state.sections.length}
+          backupLinks={importPreview.state.links.length}
+          currentSections={state.sections.length}
+          currentLinks={state.links.length}
+          onCancel={() => setImportPreview(null)}
+          onRestore={() => {
+            void handleRestoreBackup();
+          }}
+        />
+      )}
       {showNewSection && (
         <NewSectionForm
           onCreate={(name) => {

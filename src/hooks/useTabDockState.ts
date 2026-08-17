@@ -431,6 +431,32 @@ export function useTabDockState() {
     [persist, state],
   );
 
+  const replaceState = useCallback(
+    async (next: TabDockState) => {
+      const previous = state;
+      const ensured = ensureTemporarySection(next).state;
+      try {
+        await saveState(ensured);
+        setState(ensured);
+      } catch {
+        if (previous) {
+          try {
+            await saveState(previous);
+            setState(previous);
+          } catch {
+            try {
+              setState(await loadState());
+            } catch {
+              setState(previous);
+            }
+          }
+        }
+        throw new Error("Не удалось сохранить данные TabDock");
+      }
+    },
+    [state],
+  );
+
   return {
     state,
     loading,
@@ -447,5 +473,6 @@ export function useTabDockState() {
     removeLink,
     markOpened,
     setPanelSide,
+    replaceState,
   };
 }

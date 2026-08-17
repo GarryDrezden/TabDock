@@ -211,8 +211,56 @@ button:focus:not(:focus-visible) {
   padding: 0 10px;
 }
 
-.new-section-input::placeholder {
+.import-preview {
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.import-preview p {
+  margin: 0 0 6px;
+}
+
+.import-preview-title {
+  margin: 0 0 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.import-preview-file {
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.import-preview-warn {
   color: var(--text-muted);
+}
+
+.import-preview-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.import-preview-cancel {
+  color: var(--text-secondary);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .app-body {

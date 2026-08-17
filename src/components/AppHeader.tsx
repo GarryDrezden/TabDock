@@ -1,11 +1,15 @@
+import { useRef, useState } from "react";
 import { PanelSideToggle } from "./PanelSideToggle";
 import { ValknutLogo } from "./ValknutLogo";
 import type { PanelSide } from "../types/tabdock";
+import { AppMenu } from "./AppMenu";
 
 type AppHeaderProps = {
   panelSide: PanelSide;
   onAddSection: () => void;
   onDeferCurrent: () => void;
+  onExport: () => void;
+  onImport: () => void;
   onPanelSideChange: (side: PanelSide) => void;
 };
 
@@ -13,8 +17,13 @@ export function AppHeader({
   panelSide,
   onAddSection,
   onDeferCurrent,
+  onExport,
+  onImport,
   onPanelSideChange,
 }: AppHeaderProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
   return (
     <header className="app-header">
       <div className="brand">
@@ -43,6 +52,31 @@ export function AppHeader({
         >
           <PlusIcon />
         </button>
+        <button
+          ref={menuButtonRef}
+          type="button"
+          className="icon-button"
+          title="Ещё"
+          aria-label="Ещё"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <MoreIcon />
+        </button>
+        <AppMenu
+          open={menuOpen}
+          anchorRef={menuButtonRef}
+          onClose={() => setMenuOpen(false)}
+          onExport={() => {
+            setMenuOpen(false);
+            onExport();
+          }}
+          onImport={() => {
+            setMenuOpen(false);
+            onImport();
+          }}
+        />
       </div>
     </header>
   );
@@ -87,6 +121,16 @@ function PlusIcon() {
         strokeWidth="1.8"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+      <circle cx="7" cy="3" r="1.2" fill="currentColor" />
+      <circle cx="7" cy="7" r="1.2" fill="currentColor" />
+      <circle cx="7" cy="11" r="1.2" fill="currentColor" />
     </svg>
   );
 }
