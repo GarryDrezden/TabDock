@@ -25,7 +25,7 @@ export function UnsavedTabsSection({
   onDragStart,
   onDragEnd,
 }: UnsavedTabsSectionProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   if (tabs.length === 0) {
     return null;
